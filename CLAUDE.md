@@ -42,7 +42,7 @@ src/
 ### Quick Install (Recommended)
 
 ```bash
-export AGENT_VIEW_REPO="your-org/agent-view"
+export AGENT_VIEW_REPO="danhergir/seshions"
 curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/install.sh" | bash
 ```
 
@@ -55,7 +55,7 @@ This will:
 ### Manual Install
 
 ```bash
-git clone https://github.com/your-org/agent-view.git
+git clone https://github.com/danhergir/seshions.git
 cd agent-view
 bun install
 bun run build
@@ -73,7 +73,7 @@ Binaries are output to the `bin/` directory.
 ### Uninstall
 
 ```bash
-export AGENT_VIEW_REPO="your-org/agent-view"
+export AGENT_VIEW_REPO="danhergir/seshions"
 curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/uninstall.sh" | bash
 ```
 

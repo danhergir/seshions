@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Agent View Uninstaller
-# Usage: AGENT_VIEW_REPO=your-org/agent-view curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/uninstall.sh" | bash
+# Usage: AGENT_VIEW_REPO=danhergir/seshions curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/uninstall.sh" | bash
 #
 
 set -euo pipefail

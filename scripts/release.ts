@@ -14,7 +14,7 @@ const dir = path.resolve(import.meta.dir, "..")
 process.chdir(dir)
 
 const BIN_DIR = path.join(dir, "bin")
-const REPO = process.env.AGENT_VIEW_REPO ?? "your-org/agent-view"
+const REPO = process.env.AGENT_VIEW_REPO ?? "danhergir/seshions"
 
 async function main() {
   const args = process.argv.slice(2)

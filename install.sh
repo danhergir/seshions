@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
 # Agent View Installer
-# Usage: AGENT_VIEW_REPO=your-org/agent-view curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/install.sh" | bash
+# Usage: AGENT_VIEW_REPO=danhergir/seshions curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/install.sh" | bash
 #
 
 set -euo pipefail
 
 APP=agent-view
-REPO="${AGENT_VIEW_REPO:-your-org/agent-view}"
+REPO="${AGENT_VIEW_REPO:-danhergir/seshions}"
 
 # Colors
 MUTED='\033[0;2m'
@@ -31,8 +31,8 @@ Options:
         --no-modify-path    Don't modify shell config files
 
 Examples:
-    AGENT_VIEW_REPO=your-org/agent-view curl -fsSL "https://raw.githubusercontent.com/\$AGENT_VIEW_REPO/main/install.sh" | bash
-    AGENT_VIEW_REPO=your-org/agent-view curl -fsSL "https://raw.githubusercontent.com/\$AGENT_VIEW_REPO/main/install.sh" | bash -s -- --version 1.0.0
+    AGENT_VIEW_REPO=danhergir/seshions curl -fsSL "https://raw.githubusercontent.com/\$AGENT_VIEW_REPO/main/install.sh" | bash
+    AGENT_VIEW_REPO=danhergir/seshions curl -fsSL "https://raw.githubusercontent.com/\$AGENT_VIEW_REPO/main/install.sh" | bash -s -- --version 1.0.0
     ./install.sh --binary /path/to/agent-view
 EOF
 }
@@ -172,13 +172,6 @@ if [ -n "$binary_path" ]; then
     fi
     specific_version="local"
 else
-    if [ "$REPO" = "your-org/agent-view" ]; then
-        echo -e "${RED}Error: AGENT_VIEW_REPO is not set.${NC}"
-        echo -e "${MUTED}Set it to your repository, for example:${NC}"
-        echo -e "  AGENT_VIEW_REPO=my-org/agent-view"
-        exit 1
-    fi
-
     platform=$(detect_platform)
     filename="$APP-$platform.tar.gz"
 
