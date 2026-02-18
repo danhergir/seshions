@@ -252,7 +252,7 @@ export function Home() {
     renderer.resume()
     sync.refresh()
 
-    // Check if user pressed Ctrl+K to open action hub
+    // Check if user pressed Ctrl+K to open command palette
     if (wasCommandPaletteRequested()) {
       command.open()
     }

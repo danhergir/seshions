@@ -1,23 +1,29 @@
-import { describe, test, expect } from "vitest"
+import { describe, test, expect } from "bun:test"
 import {
-  APP_NAME,
-  PRIMARY_COMMANDS,
   SESSION_PREFIX,
-  getAppDir,
-  getConfigPath,
-  getStateDbPath
+  LEGACY_SESSION_PREFIX,
+  getLegacyCommandWarning,
+  LEGACY_COMMANDS
 } from "./app-paths"
 
 describe("app-paths", () => {
-  test("exports app metadata", () => {
-    expect(APP_NAME).toBe("seshions")
-    expect(PRIMARY_COMMANDS).toEqual(["seshions"])
-    expect(SESSION_PREFIX).toBe("seshions_")
+  test("uses agent-view session prefix by default", () => {
+    expect(SESSION_PREFIX).toBe("agentview_")
   })
 
-  test("uses seshions home directory paths", () => {
-    expect(getAppDir()).toContain(".seshions")
-    expect(getConfigPath()).toContain(".seshions/config.json")
-    expect(getStateDbPath()).toContain(".seshions/state.json")
+  test("retains legacy session prefix for compatibility checks", () => {
+    expect(LEGACY_SESSION_PREFIX).toBe("agentorch_")
+  })
+
+  test("returns deprecation warning for legacy commands", () => {
+    for (const command of LEGACY_COMMANDS) {
+      expect(getLegacyCommandWarning(command)).toContain("[deprecation]")
+    }
+  })
+
+  test("returns null for non-legacy commands", () => {
+    expect(getLegacyCommandWarning("agent-view")).toBeNull()
+    expect(getLegacyCommandWarning("av")).toBeNull()
+    expect(getLegacyCommandWarning(undefined)).toBeNull()
   })
 })

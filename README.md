@@ -12,61 +12,49 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 
 ## Requirements
 
+- Bun
 - tmux
 - At least one coding tool installed (`claude`, `codex`, `gemini`, `opencode`, or custom shell command)
-
-For local development:
-- Node.js 20+
-- npm
 
 ## Local Development
 
 ```bash
-npm install
-npm run build
-npm run typecheck
-npm test
+bun install
+bun run build
+bun run typecheck
+bun test
 ```
 
 ## Run
 
 ```bash
-npm start
+bun run dist/index.js
 ```
 
 ## Build Binary
 
 ```bash
-npm run compile
+bun run compile
 ```
 
 ## Install Script
 
-```bash
-curl -fsSL "https://raw.githubusercontent.com/danhergir/seshions/main/install.sh" | bash
-```
-
-## Homebrew (Recommended)
+Set your repo first, then run installer:
 
 ```bash
-brew tap danhergir/tap
-brew install --build-from-source danhergir/tap/seshions
-```
-
-Upgrade:
-
-```bash
-brew upgrade danhergir/tap/seshions
+export AGENT_VIEW_REPO="danhergir/seshions"
+curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/install.sh" | bash
 ```
 
 ## Uninstall
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/danhergir/seshions/main/uninstall.sh" | bash
+export AGENT_VIEW_REPO="danhergir/seshions"
+curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/uninstall.sh" | bash
 ```
 
 Optional full cleanup:
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/danhergir/seshions/main/uninstall.sh" | bash -s -- --purge-data
+curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/uninstall.sh" | bash -s -- --purge-data --purge-legacy-data
 ```

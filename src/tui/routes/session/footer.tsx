@@ -34,11 +34,11 @@ export function SessionFooter(props: { session: Session }) {
         </text>
         <text>
           <span style={{ fg: theme.textMuted }}>Ctrl+K</span>
-          <span style={{ fg: theme.text }}> actions</span>
+          <span style={{ fg: theme.text }}> commands</span>
         </text>
         <text>
           <span style={{ fg: theme.textMuted }}>q</span>
-          <span style={{ fg: theme.text }}> close</span>
+          <span style={{ fg: theme.text }}> back</span>
         </text>
       </box>
     </box>

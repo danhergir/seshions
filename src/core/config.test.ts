@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach } from "vitest"
+import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import * as fs from "fs/promises"
 import * as path from "path"
 import * as os from "os"
@@ -15,7 +15,7 @@ import {
 } from "./config"
 
 describe("config", () => {
-  const testConfigDir = path.join(os.tmpdir(), `seshions-test-${Date.now()}`)
+  const testConfigDir = path.join(os.tmpdir(), `agent-view-test-${Date.now()}`)
   const testConfigPath = path.join(testConfigDir, "config.json")
 
   // Store original values to restore after tests
@@ -46,7 +46,6 @@ describe("config", () => {
       expect(config.worktree).toBeDefined()
       expect(config.worktree?.defaultBaseBranch).toBe("main")
       expect(config.worktree?.autoCleanup).toBe(true)
-      expect(config.templates).toEqual([])
     })
 
     test("returns a copy, not the original", () => {
@@ -62,14 +61,14 @@ describe("config", () => {
   describe("getConfigDir", () => {
     test("returns path in home directory", () => {
       const dir = getConfigDir()
-      expect(dir).toBe(path.join(os.homedir(), ".seshions"))
+      expect(dir).toBe(path.join(os.homedir(), ".agent-view"))
     })
   })
 
   describe("getConfigPath", () => {
     test("returns config.json path", () => {
       const configPath = getConfigPath()
-      expect(configPath).toBe(path.join(os.homedir(), ".seshions", "config.json"))
+      expect(configPath).toBe(path.join(os.homedir(), ".agent-view", "config.json"))
     })
   })
 
@@ -127,8 +126,7 @@ describe("config", () => {
           defaultBaseBranch: "main",
           autoCleanup: true
         },
-        defaultGroup: "default",
-        templates: []
+        defaultGroup: "default"
       }
 
       expect(config.defaultTool).toBe("claude")
@@ -136,7 +134,6 @@ describe("config", () => {
       expect(config.worktree?.defaultBaseBranch).toBe("main")
       expect(config.worktree?.autoCleanup).toBe(true)
       expect(config.defaultGroup).toBe("default")
-      expect(config.templates).toEqual([])
     })
 
     test("AppConfig allows partial worktree config", () => {
@@ -159,7 +156,6 @@ describe("config", () => {
       expect(config.theme).toBeUndefined()
       expect(config.worktree).toBeUndefined()
       expect(config.defaultGroup).toBeUndefined()
-      expect(config.templates).toBeUndefined()
     })
   })
 

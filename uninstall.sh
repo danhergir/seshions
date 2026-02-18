@@ -1,23 +1,25 @@
 #!/usr/bin/env bash
 #
-# Seshions Uninstaller
-# Usage: curl -fsSL "https://raw.githubusercontent.com/danhergir/seshions/main/uninstall.sh" | bash
+# Agent View Uninstaller
+# Usage: AGENT_VIEW_REPO=danhergir/seshions curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/uninstall.sh" | bash
 #
 
 set -euo pipefail
 
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m'
+NC='\033[0m' # No Color
 
-INSTALL_DIR="${SESHIONS_INSTALL_DIR:-$HOME/.seshions/bin}"
-BIN_DIR="${SESHIONS_BIN_DIR:-$HOME/.local/bin}"
-DATA_DIR="${SESHIONS_DATA_DIR:-$HOME/.seshions}"
-BREW_FORMULA="${SESHIONS_BREW_FORMULA:-danhergir/tap/seshions}"
+INSTALL_DIR="${AGENT_VIEW_INSTALL_DIR:-$HOME/.agent-view/bin}"
+BIN_DIR="${AGENT_VIEW_BIN_DIR:-$HOME/.local/bin}"
+DATA_DIR="${AGENT_VIEW_DATA_DIR:-$HOME/.agent-view}"
+LEGACY_DATA_DIR="${AGENT_VIEW_LEGACY_DATA_DIR:-$HOME/.agent-orchestrator}"
 
 purge_data=false
+purge_legacy_data=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -25,73 +27,84 @@ while [[ $# -gt 0 ]]; do
       purge_data=true
       shift
       ;;
+    --purge-legacy-data)
+      purge_legacy_data=true
+      shift
+      ;;
     -h|--help)
-      cat <<USAGE
-Seshions Uninstaller
+      cat <<EOF
+Agent View Uninstaller
 
 Usage:
-  uninstall.sh [--purge-data]
+  uninstall.sh [--purge-data] [--purge-legacy-data]
 
 Options:
-  --purge-data   Remove ~/.seshions data (state.json, config.json, logs)
-USAGE
+  --purge-data         Remove ~/.agent-view data (state.db, config.json, logs)
+  --purge-legacy-data  Remove ~/.agent-orchestrator legacy data directory
+EOF
       exit 0
       ;;
     *)
-      echo -e "${YELLOW}[seshions]${NC} Unknown option: $1"
+      echo -e "${YELLOW}[agent-view]${NC} Unknown option: $1"
       shift
       ;;
   esac
 done
 
 log() {
-  echo -e "${BLUE}[seshions]${NC} $1"
+  echo -e "${BLUE}[agent-view]${NC} $1"
 }
 
 success() {
-  echo -e "${GREEN}[seshions]${NC} $1"
+  echo -e "${GREEN}[agent-view]${NC} $1"
 }
 
 warn() {
-  echo -e "${YELLOW}[seshions]${NC} $1"
+  echo -e "${YELLOW}[agent-view]${NC} $1"
 }
 
 main() {
   echo ""
   echo -e "${BLUE}╭───────────────────────────────────╮${NC}"
-  echo -e "${BLUE}│       ${RED}Seshions Uninstaller${BLUE}        │${NC}"
+  echo -e "${BLUE}│      ${RED}Agent View Uninstaller${BLUE}       │${NC}"
   echo -e "${BLUE}╰───────────────────────────────────╯${NC}"
   echo ""
 
-  if command -v brew >/dev/null 2>&1 && brew list --formula "$BREW_FORMULA" >/dev/null 2>&1; then
-    log "Uninstalling Homebrew formula $BREW_FORMULA..."
-    brew uninstall --formula "$BREW_FORMULA" || true
-  fi
+  for cmd in agent-view av agent-orchestrator ao; do
+    if [ -f "$INSTALL_DIR/$cmd" ]; then
+      log "Removing $INSTALL_DIR/$cmd..."
+      rm -f "$INSTALL_DIR/$cmd"
+    fi
+  done
 
-  if [[ -f "$INSTALL_DIR/seshions" ]]; then
-    log "Removing $INSTALL_DIR/seshions..."
-    rm -f "$INSTALL_DIR/seshions"
-  fi
+  for cmd in agent-view av agent-orchestrator ao; do
+    if [ -L "$BIN_DIR/$cmd" ] || [ -f "$BIN_DIR/$cmd" ]; then
+      log "Removing $BIN_DIR/$cmd..."
+      rm -f "$BIN_DIR/$cmd"
+    fi
+  done
 
-  if [[ -L "$BIN_DIR/seshions" || -f "$BIN_DIR/seshions" ]]; then
-    log "Removing $BIN_DIR/seshions..."
-    rm -f "$BIN_DIR/seshions"
-  fi
-
-  if [[ -d "$INSTALL_DIR" && -z "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]]; then
+  if [ -d "$INSTALL_DIR" ] && [ -z "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
     log "Removing empty install directory $INSTALL_DIR..."
     rmdir "$INSTALL_DIR" || true
   fi
 
-  if [[ "$purge_data" == "true" && -d "$DATA_DIR" ]]; then
+  if [ "$purge_data" = true ] && [ -d "$DATA_DIR" ]; then
     log "Purging data directory $DATA_DIR..."
     rm -rf "$DATA_DIR"
   fi
 
+  if [ "$purge_legacy_data" = true ] && [ -d "$LEGACY_DATA_DIR" ]; then
+    log "Purging legacy data directory $LEGACY_DATA_DIR..."
+    rm -rf "$LEGACY_DATA_DIR"
+  fi
+
   echo ""
-  success "Seshions has been uninstalled"
-  warn "PATH entries in shell config files were not removed"
-  warn "Use --purge-data to remove ~/.seshions data"
+  success "Agent View has been uninstalled"
+  echo ""
+  warn "Note: PATH entries in shell config files were not removed"
+  warn "User data is preserved by default. Use --purge-data to remove ~/.agent-view data."
+  warn "Legacy data is preserved by default. Use --purge-legacy-data to remove ~/.agent-orchestrator."
   echo ""
 }
 

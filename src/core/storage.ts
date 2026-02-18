@@ -1,415 +1,464 @@
 /**
- * File-based storage for session/group persistence
- * Node runtime compatible replacement for Bun SQLite storage
+ * SQLite storage for session/group persistence
+ * Uses Bun's built-in SQLite
  */
 
+import { Database } from "bun:sqlite"
 import path from "path"
 import fs from "fs"
 import type { Session, Group, StatusUpdate, Tool, SessionStatus } from "./types"
-import { getStateDbPath } from "./app-paths"
+import {
+  resolveStateDbPathWithFallback,
+  getLegacyStateDbPath,
+  getStateDbPath,
+  COMPATIBILITY_WINDOW_NOTICE
+} from "./app-paths"
 
 const SCHEMA_VERSION = 1
-
-interface PersistedSession {
-  id: string
-  title: string
-  projectPath: string
-  groupPath: string
-  order: number
-  command: string
-  wrapper: string
-  tool: Tool
-  status: SessionStatus
-  tmuxSession: string
-  createdAt: number
-  lastAccessed: number
-  parentSessionId: string
-  worktreePath: string
-  worktreeRepo: string
-  worktreeBranch: string
-  toolData: Record<string, unknown>
-  acknowledged: boolean
-}
-
-interface HeartbeatRow {
-  pid: number
-  started: number
-  heartbeat: number
-  isPrimary: boolean
-}
-
-interface PersistedState {
-  schemaVersion: number
-  metadata: Record<string, string>
-  sessions: PersistedSession[]
-  groups: Group[]
-  heartbeats: HeartbeatRow[]
-}
-
-const DEFAULT_STATE: PersistedState = {
-  schemaVersion: SCHEMA_VERSION,
-  metadata: {},
-  sessions: [],
-  groups: [],
-  heartbeats: [],
-}
 
 export interface StorageOptions {
   dbPath?: string
 }
 
 export class Storage {
-  private readonly filePath: string
-  private readonly pid: number
-  private state: PersistedState
+  private db: Database
+  private pid: number
   private closed = false
 
   constructor(options: StorageOptions = {}) {
-    this.filePath = options.dbPath ?? this.getDefaultPath()
-    this.pid = process.pid
+    const dbPath = options.dbPath ?? this.getDefaultPath()
 
-    const dir = path.dirname(this.filePath)
+    // Ensure directory exists
+    const dir = path.dirname(dbPath)
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 })
     }
 
-    this.state = this.loadState()
+    this.db = new Database(dbPath)
+    this.pid = process.pid
+
+    // Configure SQLite for concurrent access
+    this.db.exec("PRAGMA journal_mode = WAL")
+    this.db.exec("PRAGMA busy_timeout = 5000")
+    this.db.exec("PRAGMA foreign_keys = ON")
   }
 
   private getDefaultPath(): string {
-    return getStateDbPath()
-  }
-
-  private loadState(): PersistedState {
-    if (!fs.existsSync(this.filePath)) {
-      return { ...DEFAULT_STATE }
+    const resolved = resolveStateDbPathWithFallback()
+    if (resolved.usingLegacy) {
+      console.warn(
+        `[deprecation] Using legacy state DB '${getLegacyStateDbPath()}' instead of '${getStateDbPath()}'. ${COMPATIBILITY_WINDOW_NOTICE}`
+      )
     }
-
-    try {
-      const raw = fs.readFileSync(this.filePath, "utf8")
-      const parsed = JSON.parse(raw) as Partial<PersistedState>
-
-      return {
-        schemaVersion: parsed.schemaVersion ?? SCHEMA_VERSION,
-        metadata: parsed.metadata ?? {},
-        sessions: (parsed.sessions ?? []).map((session) => ({
-          id: session.id ?? "",
-          title: session.title ?? "",
-          projectPath: session.projectPath ?? "",
-          groupPath: session.groupPath ?? "my-sessions",
-          order: session.order ?? 0,
-          command: session.command ?? "",
-          wrapper: session.wrapper ?? "",
-          tool: (session.tool ?? "shell") as Tool,
-          status: (session.status ?? "idle") as SessionStatus,
-          tmuxSession: session.tmuxSession ?? "",
-          createdAt: Number(session.createdAt ?? Date.now()),
-          lastAccessed: Number(session.lastAccessed ?? 0),
-          parentSessionId: session.parentSessionId ?? "",
-          worktreePath: session.worktreePath ?? "",
-          worktreeRepo: session.worktreeRepo ?? "",
-          worktreeBranch: session.worktreeBranch ?? "",
-          toolData: session.toolData ?? {},
-          acknowledged: Boolean(session.acknowledged),
-        })),
-        groups: parsed.groups ?? [],
-        heartbeats: parsed.heartbeats ?? [],
-      }
-    } catch {
-      return { ...DEFAULT_STATE }
-    }
-  }
-
-  private persist(): void {
-    if (this.closed) return
-
-    const tempPath = `${this.filePath}.tmp`
-    fs.writeFileSync(tempPath, JSON.stringify(this.state, null, 2), "utf8")
-    fs.renameSync(tempPath, this.filePath)
-  }
-
-  private toPersistedSession(session: Session): PersistedSession {
-    return {
-      id: session.id,
-      title: session.title,
-      projectPath: session.projectPath,
-      groupPath: session.groupPath,
-      order: session.order,
-      command: session.command,
-      wrapper: session.wrapper,
-      tool: session.tool,
-      status: session.status,
-      tmuxSession: session.tmuxSession,
-      createdAt: session.createdAt.getTime(),
-      lastAccessed: session.lastAccessed.getTime(),
-      parentSessionId: session.parentSessionId,
-      worktreePath: session.worktreePath,
-      worktreeRepo: session.worktreeRepo,
-      worktreeBranch: session.worktreeBranch,
-      toolData: session.toolData,
-      acknowledged: session.acknowledged,
-    }
-  }
-
-  private toSession(session: PersistedSession): Session {
-    return {
-      id: session.id,
-      title: session.title,
-      projectPath: session.projectPath,
-      groupPath: session.groupPath,
-      order: session.order,
-      command: session.command,
-      wrapper: session.wrapper,
-      tool: session.tool,
-      status: session.status,
-      tmuxSession: session.tmuxSession,
-      createdAt: new Date(session.createdAt),
-      lastAccessed: new Date(session.lastAccessed),
-      parentSessionId: session.parentSessionId,
-      worktreePath: session.worktreePath,
-      worktreeRepo: session.worktreeRepo,
-      worktreeBranch: session.worktreeBranch,
-      toolData: session.toolData,
-      acknowledged: session.acknowledged,
-    }
+    return resolved.path
   }
 
   migrate(): void {
-    this.state.schemaVersion = SCHEMA_VERSION
-    if (!this.state.metadata.schema_version) {
-      this.state.metadata.schema_version = String(SCHEMA_VERSION)
-    }
-    this.persist()
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    `)
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        project_path TEXT NOT NULL,
+        group_path TEXT NOT NULL DEFAULT 'my-sessions',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        command TEXT NOT NULL DEFAULT '',
+        wrapper TEXT NOT NULL DEFAULT '',
+        tool TEXT NOT NULL DEFAULT 'shell',
+        status TEXT NOT NULL DEFAULT 'idle',
+        tmux_session TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        last_accessed INTEGER NOT NULL DEFAULT 0,
+        parent_session_id TEXT NOT NULL DEFAULT '',
+        worktree_path TEXT NOT NULL DEFAULT '',
+        worktree_repo TEXT NOT NULL DEFAULT '',
+        worktree_branch TEXT NOT NULL DEFAULT '',
+        tool_data TEXT NOT NULL DEFAULT '{}',
+        acknowledged INTEGER NOT NULL DEFAULT 0
+      )
+    `)
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS groups (
+        path TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        expanded INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        default_path TEXT NOT NULL DEFAULT ''
+      )
+    `)
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS heartbeats (
+        pid INTEGER PRIMARY KEY,
+        started INTEGER NOT NULL,
+        heartbeat INTEGER NOT NULL,
+        is_primary INTEGER NOT NULL DEFAULT 0
+      )
+    `)
+
+    // Set schema version
+    const setVersion = this.db.prepare(
+      "INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', ?)"
+    )
+    setVersion.run(String(SCHEMA_VERSION))
   }
 
   close(): void {
     if (this.closed) return
-    this.persist()
     this.closed = true
+    try {
+      this.db.exec("PRAGMA wal_checkpoint(TRUNCATE)")
+      this.db.close()
+    } catch {
+      // Ignore close errors
+    }
   }
 
   isClosed(): boolean {
     return this.closed
   }
 
+  // Session CRUD
+
   saveSession(session: Session): void {
-    const persisted = this.toPersistedSession(session)
-    const index = this.state.sessions.findIndex((s) => s.id === session.id)
-    if (index === -1) {
-      this.state.sessions.push(persisted)
-    } else {
-      this.state.sessions[index] = persisted
-    }
-    this.persist()
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO sessions (
+        id, title, project_path, group_path, sort_order,
+        command, wrapper, tool, status, tmux_session,
+        created_at, last_accessed,
+        parent_session_id, worktree_path, worktree_repo, worktree_branch,
+        tool_data, acknowledged
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    stmt.run(
+      session.id,
+      session.title,
+      session.projectPath,
+      session.groupPath,
+      session.order,
+      session.command,
+      session.wrapper,
+      session.tool,
+      session.status,
+      session.tmuxSession,
+      session.createdAt.getTime(),
+      session.lastAccessed.getTime(),
+      session.parentSessionId,
+      session.worktreePath,
+      session.worktreeRepo,
+      session.worktreeBranch,
+      JSON.stringify(session.toolData),
+      session.acknowledged ? 1 : 0
+    )
   }
 
   saveSessions(sessions: Session[]): void {
-    this.state.sessions = sessions.map((session) => this.toPersistedSession(session))
-    this.persist()
+    const deleteStmt = this.db.prepare("DELETE FROM sessions WHERE id NOT IN (" +
+      sessions.map(() => "?").join(",") + ")")
+    const insertStmt = this.db.prepare(`
+      INSERT OR REPLACE INTO sessions (
+        id, title, project_path, group_path, sort_order,
+        command, wrapper, tool, status, tmux_session,
+        created_at, last_accessed,
+        parent_session_id, worktree_path, worktree_repo, worktree_branch,
+        tool_data, acknowledged
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    const transaction = this.db.transaction(() => {
+      if (sessions.length === 0) {
+        this.db.exec("DELETE FROM sessions")
+      } else {
+        deleteStmt.run(...sessions.map(s => s.id))
+      }
+
+      for (const session of sessions) {
+        insertStmt.run(
+          session.id,
+          session.title,
+          session.projectPath,
+          session.groupPath,
+          session.order,
+          session.command,
+          session.wrapper,
+          session.tool,
+          session.status,
+          session.tmuxSession,
+          session.createdAt.getTime(),
+          session.lastAccessed.getTime(),
+          session.parentSessionId,
+          session.worktreePath,
+          session.worktreeRepo,
+          session.worktreeBranch,
+          JSON.stringify(session.toolData),
+          session.acknowledged ? 1 : 0
+        )
+      }
+    })
+
+    transaction()
   }
 
   loadSessions(): Session[] {
     if (this.closed) return []
-    return [...this.state.sessions]
-      .sort((a, b) => a.order - b.order)
-      .map((session) => this.toSession(session))
+    const stmt = this.db.prepare(`
+      SELECT id, title, project_path, group_path, sort_order,
+        command, wrapper, tool, status, tmux_session,
+        created_at, last_accessed,
+        parent_session_id, worktree_path, worktree_repo, worktree_branch,
+        tool_data, acknowledged
+      FROM sessions ORDER BY sort_order
+    `)
+
+    const rows = stmt.all() as any[]
+    return rows.map(row => ({
+      id: row.id,
+      title: row.title,
+      projectPath: row.project_path,
+      groupPath: row.group_path,
+      order: row.sort_order,
+      command: row.command,
+      wrapper: row.wrapper,
+      tool: row.tool as Tool,
+      status: row.status as SessionStatus,
+      tmuxSession: row.tmux_session,
+      createdAt: new Date(row.created_at),
+      lastAccessed: new Date(row.last_accessed),
+      parentSessionId: row.parent_session_id,
+      worktreePath: row.worktree_path,
+      worktreeRepo: row.worktree_repo,
+      worktreeBranch: row.worktree_branch,
+      toolData: JSON.parse(row.tool_data),
+      acknowledged: row.acknowledged === 1
+    }))
   }
 
   getSession(id: string): Session | null {
-    const session = this.state.sessions.find((s) => s.id === id)
-    return session ? this.toSession(session) : null
+    const stmt = this.db.prepare(`
+      SELECT id, title, project_path, group_path, sort_order,
+        command, wrapper, tool, status, tmux_session,
+        created_at, last_accessed,
+        parent_session_id, worktree_path, worktree_repo, worktree_branch,
+        tool_data, acknowledged
+      FROM sessions WHERE id = ?
+    `)
+
+    const row = stmt.get(id) as any
+    if (!row) return null
+
+    return {
+      id: row.id,
+      title: row.title,
+      projectPath: row.project_path,
+      groupPath: row.group_path,
+      order: row.sort_order,
+      command: row.command,
+      wrapper: row.wrapper,
+      tool: row.tool as Tool,
+      status: row.status as SessionStatus,
+      tmuxSession: row.tmux_session,
+      createdAt: new Date(row.created_at),
+      lastAccessed: new Date(row.last_accessed),
+      parentSessionId: row.parent_session_id,
+      worktreePath: row.worktree_path,
+      worktreeRepo: row.worktree_repo,
+      worktreeBranch: row.worktree_branch,
+      toolData: JSON.parse(row.tool_data),
+      acknowledged: row.acknowledged === 1
+    }
   }
 
   deleteSession(id: string): void {
-    this.state.sessions = this.state.sessions.filter((s) => s.id !== id)
-    this.persist()
+    const stmt = this.db.prepare("DELETE FROM sessions WHERE id = ?")
+    stmt.run(id)
   }
 
   updateSessionField(id: string, field: string, value: unknown): void {
-    const session = this.state.sessions.find((s) => s.id === id)
-    if (!session) return
-
-    const fieldMap: Record<string, keyof PersistedSession> = {
-      project_path: "projectPath",
-      projectPath: "projectPath",
-      group_path: "groupPath",
-      groupPath: "groupPath",
-      sort_order: "order",
-      sortOrder: "order",
-      order: "order",
-      tmux_session: "tmuxSession",
-      tmuxSession: "tmuxSession",
-      created_at: "createdAt",
-      createdAt: "createdAt",
-      last_accessed: "lastAccessed",
-      lastAccessed: "lastAccessed",
-      parent_session_id: "parentSessionId",
-      parentSessionId: "parentSessionId",
-      worktree_path: "worktreePath",
-      worktreePath: "worktreePath",
-      worktree_repo: "worktreeRepo",
-      worktreeRepo: "worktreeRepo",
-      worktree_branch: "worktreeBranch",
-      worktreeBranch: "worktreeBranch",
-      tool_data: "toolData",
-      toolData: "toolData",
-      title: "title",
-      command: "command",
-      wrapper: "wrapper",
-      tool: "tool",
-      status: "status",
-      acknowledged: "acknowledged",
+    // Map TypeScript field names to SQL column names
+    const columnMap: Record<string, string> = {
+      projectPath: "project_path",
+      groupPath: "group_path",
+      sortOrder: "sort_order",
+      tmuxSession: "tmux_session",
+      createdAt: "created_at",
+      lastAccessed: "last_accessed",
+      parentSessionId: "parent_session_id",
+      worktreePath: "worktree_path",
+      worktreeRepo: "worktree_repo",
+      worktreeBranch: "worktree_branch",
+      toolData: "tool_data"
     }
-
-    const key = fieldMap[field]
-    if (!key) return
-
-    if (key === "toolData") {
-      if (typeof value === "string") {
-        try {
-          session.toolData = JSON.parse(value) as Record<string, unknown>
-        } catch {
-          session.toolData = {}
-        }
-      } else {
-        session.toolData = (value ?? {}) as Record<string, unknown>
-      }
-    } else if (key === "createdAt" || key === "lastAccessed") {
-      session[key] = typeof value === "number" ? value : Date.now()
-    } else if (key === "acknowledged") {
-      session.acknowledged = Boolean(value)
-    } else if (key === "order") {
-      session.order = Number(value ?? 0)
-    } else {
-      ;(session as any)[key] = value
-    }
-
-    this.persist()
+    const column = columnMap[field] ?? field
+    const stmt = this.db.prepare(`UPDATE sessions SET ${column} = ? WHERE id = ?`)
+    stmt.run(value as string | number | null, id)
   }
 
+  // Status updates
+
   writeStatus(id: string, status: SessionStatus, tool: Tool): void {
-    const session = this.state.sessions.find((s) => s.id === id)
-    if (!session) return
-    session.status = status
-    session.tool = tool
-    this.persist()
+    if (this.closed) return
+    const stmt = this.db.prepare("UPDATE sessions SET status = ?, tool = ? WHERE id = ?")
+    stmt.run(status, tool, id)
   }
 
   readAllStatuses(): Map<string, StatusUpdate> {
+    const stmt = this.db.prepare("SELECT id, status, tool, acknowledged FROM sessions")
+    const rows = stmt.all() as any[]
+
     const result = new Map<string, StatusUpdate>()
-    for (const session of this.state.sessions) {
-      result.set(session.id, {
-        sessionId: session.id,
-        status: session.status,
-        tool: session.tool,
-        acknowledged: session.acknowledged,
+    for (const row of rows) {
+      result.set(row.id, {
+        sessionId: row.id,
+        status: row.status as SessionStatus,
+        tool: row.tool as Tool,
+        acknowledged: row.acknowledged === 1
       })
     }
     return result
   }
 
   setAcknowledged(id: string, ack: boolean): void {
-    const session = this.state.sessions.find((s) => s.id === id)
-    if (!session) return
-    session.acknowledged = ack
-    this.persist()
+    const stmt = this.db.prepare("UPDATE sessions SET acknowledged = ? WHERE id = ?")
+    stmt.run(ack ? 1 : 0, id)
   }
 
+  // Group CRUD
+
   saveGroups(groups: Group[]): void {
-    this.state.groups = [...groups]
-    this.persist()
+    const transaction = this.db.transaction(() => {
+      this.db.exec("DELETE FROM groups")
+
+      const stmt = this.db.prepare(`
+        INSERT INTO groups (path, name, expanded, sort_order, default_path)
+        VALUES (?, ?, ?, ?, ?)
+      `)
+
+      for (const group of groups) {
+        stmt.run(
+          group.path,
+          group.name,
+          group.expanded ? 1 : 0,
+          group.order,
+          group.defaultPath
+        )
+      }
+    })
+
+    transaction()
   }
 
   loadGroups(): Group[] {
     if (this.closed) return []
-    return [...this.state.groups].sort((a, b) => a.order - b.order)
+    const stmt = this.db.prepare(`
+      SELECT path, name, expanded, sort_order, default_path
+      FROM groups ORDER BY sort_order
+    `)
+
+    const rows = stmt.all() as any[]
+    return rows.map(row => ({
+      path: row.path,
+      name: row.name,
+      expanded: row.expanded === 1,
+      order: row.sort_order,
+      defaultPath: row.default_path
+    }))
   }
 
-  deleteGroup(groupPath: string): void {
-    this.state.groups = this.state.groups.filter((g) => g.path !== groupPath)
-    this.persist()
+  deleteGroup(path: string): void {
+    const stmt = this.db.prepare("DELETE FROM groups WHERE path = ?")
+    stmt.run(path)
   }
+
+  // Heartbeat management
 
   registerInstance(isPrimary: boolean): void {
     const now = Math.floor(Date.now() / 1000)
-    const existing = this.state.heartbeats.find((h) => h.pid === this.pid)
-    if (existing) {
-      existing.heartbeat = now
-      existing.isPrimary = isPrimary
-    } else {
-      this.state.heartbeats.push({
-        pid: this.pid,
-        started: now,
-        heartbeat: now,
-        isPrimary,
-      })
-    }
-    this.persist()
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO heartbeats (pid, started, heartbeat, is_primary)
+      VALUES (?, ?, ?, ?)
+    `)
+    stmt.run(this.pid, now, now, isPrimary ? 1 : 0)
   }
 
   heartbeat(): void {
     const now = Math.floor(Date.now() / 1000)
-    const row = this.state.heartbeats.find((h) => h.pid === this.pid)
-    if (!row) return
-    row.heartbeat = now
-    this.persist()
+    const stmt = this.db.prepare("UPDATE heartbeats SET heartbeat = ? WHERE pid = ?")
+    stmt.run(now, this.pid)
   }
 
   unregisterInstance(): void {
-    this.state.heartbeats = this.state.heartbeats.filter((h) => h.pid !== this.pid)
-    this.persist()
+    const stmt = this.db.prepare("DELETE FROM heartbeats WHERE pid = ?")
+    stmt.run(this.pid)
   }
 
   cleanDeadInstances(timeoutSeconds: number): void {
     const cutoff = Math.floor(Date.now() / 1000) - timeoutSeconds
-    this.state.heartbeats = this.state.heartbeats.filter((h) => h.heartbeat >= cutoff)
-    this.persist()
+    const stmt = this.db.prepare("DELETE FROM heartbeats WHERE heartbeat < ?")
+    stmt.run(cutoff)
   }
 
   aliveInstanceCount(): number {
     const cutoff = Math.floor(Date.now() / 1000) - 30
-    return this.state.heartbeats.filter((h) => h.heartbeat >= cutoff).length
+    const stmt = this.db.prepare("SELECT COUNT(*) as count FROM heartbeats WHERE heartbeat >= ?")
+    const row = stmt.get(cutoff) as { count: number }
+    return row.count
   }
 
   electPrimary(timeoutSeconds: number): boolean {
     const cutoff = Math.floor(Date.now() / 1000) - timeoutSeconds
 
-    for (const row of this.state.heartbeats) {
-      if (row.heartbeat < cutoff && row.isPrimary) {
-        row.isPrimary = false
+    const transaction = this.db.transaction(() => {
+      // Clear stale primaries
+      this.db.prepare(
+        "UPDATE heartbeats SET is_primary = 0 WHERE heartbeat < ? AND is_primary = 1"
+      ).run(cutoff)
+
+      // Check for existing primary
+      const existing = this.db.prepare(
+        "SELECT pid FROM heartbeats WHERE is_primary = 1 AND heartbeat >= ? LIMIT 1"
+      ).get(cutoff) as { pid: number } | undefined
+
+      if (existing) {
+        return existing.pid === this.pid
       }
-    }
 
-    const existing = this.state.heartbeats.find((h) => h.isPrimary && h.heartbeat >= cutoff)
-    if (existing) {
-      return existing.pid === this.pid
-    }
+      // Claim primary
+      this.db.prepare("UPDATE heartbeats SET is_primary = 1 WHERE pid = ?").run(this.pid)
+      return true
+    })
 
-    const own = this.state.heartbeats.find((h) => h.pid === this.pid)
-    if (!own) return false
-
-    own.isPrimary = true
-    this.persist()
-    return true
+    return transaction()
   }
 
   resignPrimary(): void {
-    const own = this.state.heartbeats.find((h) => h.pid === this.pid)
-    if (!own) return
-    own.isPrimary = false
-    this.persist()
+    const stmt = this.db.prepare("UPDATE heartbeats SET is_primary = 0 WHERE pid = ?")
+    stmt.run(this.pid)
   }
+
+  // Metadata
 
   setMeta(key: string, value: string): void {
     if (this.closed) return
-    this.state.metadata[key] = value
-    this.persist()
+    const stmt = this.db.prepare("INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)")
+    stmt.run(key, value)
   }
 
   getMeta(key: string): string | null {
     if (this.closed) return null
-    return this.state.metadata[key] ?? null
+    const stmt = this.db.prepare("SELECT value FROM metadata WHERE key = ?")
+    const row = stmt.get(key) as { value: string } | undefined
+    return row?.value ?? null
   }
+
+  // Change detection
 
   touch(): void {
     this.setMeta("last_modified", String(Date.now()))
@@ -417,14 +466,17 @@ export class Storage {
 
   lastModified(): number {
     const value = this.getMeta("last_modified")
-    return value ? Number.parseInt(value, 10) : 0
+    return value ? parseInt(value, 10) : 0
   }
 
   isEmpty(): boolean {
-    return this.state.sessions.length === 0
+    const stmt = this.db.prepare("SELECT COUNT(*) as count FROM sessions")
+    const row = stmt.get() as { count: number }
+    return row.count === 0
   }
 }
 
+// Global instance
 let globalStorage: Storage | null = null
 
 export function getStorage(): Storage {
