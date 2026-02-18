@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Release script for agent-view
+ * Release script for seshions
  *
  * Usage:
  *   bun run scripts/release.ts 1.0.0                          # Release version 1.0.0 (current platform binary)
@@ -15,7 +15,7 @@ const dir = path.resolve(import.meta.dir, "..")
 process.chdir(dir)
 
 const BIN_DIR = path.join(dir, "bin")
-const REPO = process.env.AGENT_VIEW_REPO ?? "danhergir/seshions"
+const REPO = process.env.SESHIONS_REPO ?? "danhergir/seshions"
 
 async function main() {
   const args = process.argv.slice(2)
@@ -33,7 +33,7 @@ async function main() {
 
   console.log("")
   console.log("╭───────────────────────────────────╮")
-  console.log("│       Agent View Release          │")
+  console.log("│       Seshions Release          │")
   console.log("╰───────────────────────────────────╯")
   console.log("")
   console.log(`Version: ${tag}`)
@@ -84,12 +84,12 @@ async function main() {
   // Step 5: Create GitHub release
   console.log("🚀 Creating GitHub release...")
 
-  const releaseNotes = `## Agent View ${tag}
+  const releaseNotes = `## Seshions ${tag}
 
 ### Installation
 
 \`\`\`bash
-AGENT_VIEW_REPO=${REPO} curl -fsSL "https://raw.githubusercontent.com/\${AGENT_VIEW_REPO}/main/install.sh" | bash
+SESHIONS_REPO=${REPO} curl -fsSL "https://raw.githubusercontent.com/\${SESHIONS_REPO}/main/install.sh" | bash
 \`\`\`
 
 ### Direct Download
@@ -99,12 +99,11 @@ Download the binary for your platform below, make it executable, and run it.
 ### Changes
 
 - See commit history for changes
-- Compatibility aliases (\`agent-orchestrator\`, \`ao\`) are deprecated and temporary
 `
 
   const draftFlag = isDraft ? "--draft" : ""
   const binaries = await Array.fromAsync(
-    new Bun.Glob("agent-view-*").scan({ cwd: BIN_DIR })
+    new Bun.Glob("seshions-*").scan({ cwd: BIN_DIR })
   )
 
   const binaryPaths = binaries.map(b => path.join(BIN_DIR, b)).join(" ")

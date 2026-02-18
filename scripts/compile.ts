@@ -1,13 +1,13 @@
 #!/usr/bin/env bun
 /**
- * Compile agent-view to standalone binaries for distribution
+ * Compile seshions to standalone binaries for distribution
  *
  * Usage:
  *   bun run scripts/compile.ts           # Compile for current platform
  *   bun run scripts/compile.ts --all     # Compile for all platforms
  *
  * Output: Creates a tarball for each platform containing:
- *   - agent-view binary
+ *   - seshions binary
  *   - prebuilds/ directory with native modules
  *   - install script
  */
@@ -83,8 +83,8 @@ async function buildSource(): Promise<boolean> {
 // Compile to standalone binary and create distribution package
 async function compileForPlatform(platform: Platform): Promise<boolean> {
   const target = getBunTarget(platform)
-  const packageDir = path.join(BIN_DIR, `agent-view-${platform}`)
-  const binaryPath = path.join(packageDir, "agent-view")
+  const packageDir = path.join(BIN_DIR, `seshions-${platform}`)
+  const binaryPath = path.join(packageDir, "seshions")
   const prebuildsDir = path.join(packageDir, "prebuilds", platform)
 
   console.log(`🔨 Compiling for ${platform}...`)
@@ -134,7 +134,7 @@ async function compileForPlatform(platform: Platform): Promise<boolean> {
     // Create launcher script
     const launcherPath = path.join(packageDir, "run.sh")
     const launcher = `#!/usr/bin/env bash
-# Agent View launcher - sets up native module paths
+# Seshions launcher - sets up native module paths
 # Resolve symlinks to find the real script location
 SOURCE="\${BASH_SOURCE[0]}"
 while [ -L "\$SOURCE" ]; do
@@ -144,7 +144,7 @@ while [ -L "\$SOURCE" ]; do
 done
 SCRIPT_DIR="$(cd -P "$(dirname "\$SOURCE")" && pwd)"
 export NODE_PTY_PREBUILDS="\$SCRIPT_DIR/prebuilds"
-exec "\$SCRIPT_DIR/agent-view" "\$@"
+exec "\$SCRIPT_DIR/seshions" "\$@"
 `
     await Bun.write(launcherPath, launcher)
     await chmod(launcherPath, 0o755)
@@ -152,14 +152,14 @@ exec "\$SCRIPT_DIR/agent-view" "\$@"
     // Create install script
     const installPath = path.join(packageDir, "install.sh")
     const installScript = `#!/usr/bin/env bash
-# Agent View local installer
+# Seshions local installer
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
-INSTALL_DIR="\${HOME}/.local/share/agent-view"
+INSTALL_DIR="\${HOME}/.local/share/seshions"
 BIN_DIR="\${HOME}/.local/bin"
 
-echo "Installing Agent View..."
+echo "Installing Seshions..."
 
 # Create directories
 mkdir -p "\$INSTALL_DIR" "\$BIN_DIR"
@@ -168,14 +168,10 @@ mkdir -p "\$INSTALL_DIR" "\$BIN_DIR"
 cp -r "\$SCRIPT_DIR"/* "\$INSTALL_DIR/"
 
 # Create symlink
-ln -sf "\$INSTALL_DIR/run.sh" "\$BIN_DIR/agent-view"
-ln -sf "\$INSTALL_DIR/run.sh" "\$BIN_DIR/av"
-ln -sf "\$INSTALL_DIR/run.sh" "\$BIN_DIR/agent-orchestrator"
-ln -sf "\$INSTALL_DIR/run.sh" "\$BIN_DIR/ao"
+ln -sf "\$INSTALL_DIR/run.sh" "\$BIN_DIR/seshions"
 
 echo "✅ Installed to \$INSTALL_DIR"
-echo "   Commands: agent-view, av"
-echo "   Deprecated compatibility aliases: agent-orchestrator, ao"
+echo "   Command: seshions"
 echo ""
 echo "Make sure \$BIN_DIR is in your PATH"
 `
@@ -183,10 +179,10 @@ echo "Make sure \$BIN_DIR is in your PATH"
     await chmod(installPath, 0o755)
 
     // Create tarball
-    const tarballName = `agent-view-${platform}.tar.gz`
+    const tarballName = `seshions-${platform}.tar.gz`
     const tarballPath = path.join(BIN_DIR, tarballName)
 
-    await $`tar -czf ${tarballPath} -C ${BIN_DIR} agent-view-${platform}`.quiet()
+    await $`tar -czf ${tarballPath} -C ${BIN_DIR} seshions-${platform}`.quiet()
 
     const stats = await Bun.file(tarballPath).stat()
     const sizeMB = (stats?.size ?? 0) / (1024 * 1024)
@@ -206,7 +202,7 @@ async function main(): Promise<void> {
 
   console.log("")
   console.log("╭───────────────────────────────────╮")
-  console.log("│     Agent View Compiler           │")
+  console.log("│     Seshions Compiler           │")
   console.log("╰───────────────────────────────────╯")
   console.log("")
 
@@ -250,8 +246,8 @@ async function main(): Promise<void> {
 
     console.log("")
     console.log("To install locally, extract and run:")
-    console.log("   tar -xzf agent-view-<platform>.tar.gz")
-    console.log("   cd agent-view-<platform>")
+    console.log("   tar -xzf seshions-<platform>.tar.gz")
+    console.log("   cd seshions-<platform>")
     console.log("   ./install.sh")
   } else {
     console.log("❌ Some compilations failed")

@@ -1,4 +1,4 @@
-# Agent View - Terminal UI for AI Coding Agents
+# Seshions - Terminal UI for AI Coding Agents
 # Showcase: managing multiple AI coding sessions
 
 Output demo.gif
@@ -15,8 +15,8 @@ Enter
 Sleep 200ms
 Show
 
-# Launch Agent View
-Type "agent-view"
+# Launch Seshions
+Type "seshions"
 Enter
 Sleep 1500ms
 

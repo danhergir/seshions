@@ -1,5 +1,5 @@
 /**
- * Core types for Agent View
+ * Core types for Seshions
  */
 
 export type SessionStatus =

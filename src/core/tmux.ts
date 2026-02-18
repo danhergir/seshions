@@ -4,10 +4,7 @@
 
 import { spawn, exec } from "child_process"
 import { promisify } from "util"
-import {
-  SESSION_PREFIX as PRIMARY_SESSION_PREFIX,
-  LEGACY_SESSION_PREFIX
-} from "./app-paths"
+import { SESSION_PREFIX as PRIMARY_SESSION_PREFIX } from "./app-paths"
 
 export const SESSION_PREFIX = PRIMARY_SESSION_PREFIX
 
@@ -280,7 +277,7 @@ export async function listSessions(): Promise<string[]> {
     return stdout
       .trim()
       .split("\n")
-      .filter((name) => name.startsWith(SESSION_PREFIX) || name.startsWith(LEGACY_SESSION_PREFIX))
+      .filter((name) => name.startsWith(SESSION_PREFIX))
   } catch {
     return []
   }
@@ -437,7 +434,7 @@ export async function attachWithPty(sessionName: string): Promise<void> {
 }
 
 // Signal file for command palette request
-const COMMAND_PALETTE_SIGNAL = "/tmp/agent-view-cmd-palette"
+const COMMAND_PALETTE_SIGNAL = "/tmp/seshions-cmd-palette"
 
 /**
  * Check if command palette was requested during attached session
@@ -476,16 +473,13 @@ export function attachSessionSync(sessionName: string): void {
   // Bind Ctrl+K to create signal file and detach (opens command palette on return)
   spawnSync("tmux", ["bind-key", "-n", "C-k", "run-shell", `touch ${COMMAND_PALETTE_SIGNAL}`, "\\;", "detach-client"], { stdio: "ignore" })
 
-  // Bind Ctrl+T to open a terminal pane (split horizontally, half screen)
-  spawnSync("tmux", ["bind-key", "-n", "C-t", "split-window", "-v", "-c", "#{pane_current_path}"], { stdio: "ignore" })
-
   // Configure status bar with shortcuts
   spawnSync("tmux", ["set-option", "-t", sessionName, "status", "on"], { stdio: "ignore" })
   spawnSync("tmux", ["set-option", "-t", sessionName, "status-position", "bottom"], { stdio: "ignore" })
   spawnSync("tmux", ["set-option", "-t", sessionName, "status-style", "bg=#1e1e2e,fg=#cdd6f4"], { stdio: "ignore" })
   spawnSync("tmux", ["set-option", "-t", sessionName, "status-left", ""], { stdio: "ignore" })
   spawnSync("tmux", ["set-option", "-t", sessionName, "status-right-length", "120"], { stdio: "ignore" })
-  spawnSync("tmux", ["set-option", "-t", sessionName, "status-right", "#[fg=#89b4fa]Ctrl+K#[fg=#6c7086] cmd  #[fg=#89b4fa]Ctrl+T#[fg=#6c7086] terminal  #[fg=#89b4fa]Ctrl+Q#[fg=#6c7086] detach  #[fg=#89b4fa]Ctrl+C#[fg=#6c7086] cancel"], { stdio: "ignore" })
+  spawnSync("tmux", ["set-option", "-t", sessionName, "status-right", "#[fg=#89b4fa]Ctrl+K#[fg=#6c7086] action hub  #[fg=#89b4fa]Ctrl+Q#[fg=#6c7086] detach"], { stdio: "ignore" })
 
   // Exit alternate screen buffer (TUI uses this)
   process.stdout.write("\x1b[?1049l")
@@ -503,7 +497,6 @@ export function attachSessionSync(sessionName: string): void {
   // Unbind session-specific keys (restore default behavior)
   spawnSync("tmux", ["unbind-key", "-n", "C-q"], { stdio: "ignore" })
   spawnSync("tmux", ["unbind-key", "-n", "C-k"], { stdio: "ignore" })
-  spawnSync("tmux", ["unbind-key", "-n", "C-t"], { stdio: "ignore" })
 
   // Clear screen and re-enter alternate buffer for TUI
   process.stdout.write("\x1b[2J\x1b[H")

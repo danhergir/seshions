@@ -140,7 +140,7 @@ export class SessionManager {
         command,
         cwd: options.projectPath,
         env: {
-          AGENT_ORCHESTRATOR_SESSION: id
+          SESHIONS_SESSION: id
         }
       })
       log("tmux session created successfully")

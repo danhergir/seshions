@@ -50,8 +50,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   const { theme } = useTheme()
   const [store, setStore] = createStore({
     selected: 0,
-    filter: "",
-    input: "keyboard" as "keyboard" | "mouse"
+    filter: ""
   })
 
   let inputRef: InputRenderable
@@ -76,12 +75,6 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
       .map((x) => x.obj)
 
     return result
-  })
-
-  // Reset input mode on filter change
-  createEffect(() => {
-    filtered()
-    setStore("input", "keyboard")
   })
 
   const flatten = createMemo(() => props.flat && store.filter.length > 0)
@@ -168,8 +161,6 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
   }
 
   useKeyboard((evt) => {
-    setStore("input", "keyboard")
-
     if (evt.name === "up" || (evt.ctrl && evt.name === "p")) move(-1)
     if (evt.name === "down" || (evt.ctrl && evt.name === "n")) move(1)
     if (evt.name === "pageup") move(-10)
@@ -206,7 +197,7 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
           <text fg={theme.text} attributes={TextAttributes.BOLD}>
             {props.title}
           </text>
-          <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
+          <text fg={theme.textMuted}>
             esc
           </text>
         </box>
@@ -267,20 +258,6 @@ export function DialogSelect<T>(props: DialogSelectProps<T>) {
                       <box
                         id={JSON.stringify(option.value)}
                         flexDirection="row"
-                        onMouseMove={() => setStore("input", "mouse")}
-                        onMouseUp={() => {
-                          option.onSelect?.(dialog)
-                          props.onSelect?.(option)
-                        }}
-                        onMouseOver={() => {
-                          if (store.input !== "mouse") return
-                          const idx = flat().findIndex((x) => isEqual(x.value, option.value))
-                          if (idx !== -1) moveTo(idx)
-                        }}
-                        onMouseDown={() => {
-                          const idx = flat().findIndex((x) => isEqual(x.value, option.value))
-                          if (idx !== -1) moveTo(idx)
-                        }}
                         backgroundColor={active() ? (option.bg ?? theme.primary) : RGBA.fromInts(0, 0, 0, 0)}
                         paddingLeft={current() || option.gutter ? 1 : 3}
                         paddingRight={3}

@@ -21,24 +21,11 @@ export function Dialog(props: ParentProps<{ onClose: () => void; size?: "medium"
   log("Dialog component rendering")
   const dimensions = useTerminalDimensions()
   const { theme } = useTheme()
-  const renderer = useRenderer()
 
   log("Dialog dimensions:", dimensions().width, "x", dimensions().height)
 
-  let dismiss = false
-
   return (
     <box
-      onMouseDown={() => {
-        dismiss = !!renderer.getSelection()
-      }}
-      onMouseUp={() => {
-        if (dismiss) {
-          dismiss = false
-          return
-        }
-        props.onClose?.()
-      }}
       width={dimensions().width}
       height={dimensions().height}
       alignItems="center"
@@ -49,10 +36,6 @@ export function Dialog(props: ParentProps<{ onClose: () => void; size?: "medium"
       backgroundColor={RGBA.fromInts(0, 0, 0, 150)}
     >
       <box
-        onMouseUp={(e) => {
-          dismiss = false
-          e.stopPropagation()
-        }}
         width={props.size === "large" ? 80 : 60}
         maxWidth={dimensions().width - 2}
         backgroundColor={theme.backgroundPanel}
@@ -105,7 +88,7 @@ export function DialogProvider(props: ParentProps) {
   useKeyboard((evt) => {
     if (state.stack.length === 0) return
     if (evt.defaultPrevented) return
-    if (evt.name === "escape" || (evt.ctrl && evt.name === "c")) {
+    if (evt.name === "escape") {
       if (renderer.getSelection()) return
       const current = state.stack.at(-1)!
       current.onClose?.()

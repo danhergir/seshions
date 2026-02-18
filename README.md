@@ -42,19 +42,19 @@ bun run compile
 Set your repo first, then run installer:
 
 ```bash
-export AGENT_VIEW_REPO="danhergir/seshions"
-curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/install.sh" | bash
+export SESHIONS_REPO="danhergir/seshions"
+curl -fsSL "https://raw.githubusercontent.com/${SESHIONS_REPO}/main/install.sh" | bash
 ```
 
 ## Uninstall
 
 ```bash
-export AGENT_VIEW_REPO="danhergir/seshions"
-curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/uninstall.sh" | bash
+export SESHIONS_REPO="danhergir/seshions"
+curl -fsSL "https://raw.githubusercontent.com/${SESHIONS_REPO}/main/uninstall.sh" | bash
 ```
 
 Optional full cleanup:
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/uninstall.sh" | bash -s -- --purge-data --purge-legacy-data
+curl -fsSL "https://raw.githubusercontent.com/${SESHIONS_REPO}/main/uninstall.sh" | bash -s -- --purge-data
 ```

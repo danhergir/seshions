@@ -403,7 +403,7 @@ export function DialogNew() {
           <text fg={theme.text} attributes={TextAttributes.BOLD}>
             New Session
           </text>
-          <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
+          <text fg={theme.textMuted}>
             esc
           </text>
         </box>
@@ -414,7 +414,7 @@ export function DialogNew() {
         <text fg={focusedField() === "title" ? theme.primary : theme.textMuted}>
           Title (optional)
         </text>
-        <box onMouseUp={() => setFocusedField("title")}>
+        <box>
           <input
             placeholder="auto-generated if empty"
             value={title()}
@@ -446,12 +446,6 @@ export function DialogNew() {
               <box
                 flexDirection="row"
                 gap={1}
-                onMouseUp={() => {
-                  setSelectedTool(tool.value)
-                  setToolIndex(idx())
-                  setFocusedField("tool")
-                  setErrorMessage("") // Clear error on tool change
-                }}
                 paddingLeft={1}
                 backgroundColor={
                   selectedTool() === tool.value
@@ -477,10 +471,6 @@ export function DialogNew() {
           <box
             flexDirection="row"
             gap={1}
-            onMouseUp={() => {
-              setFocusedField("resumeSession")
-              setClaudeSessionMode(claudeSessionMode() === "new" ? "resume" : "new")
-            }}
           >
             <text fg={focusedField() === "resumeSession" ? theme.primary : theme.textMuted}>
               {claudeSessionMode() === "resume" ? "[x]" : "[ ]"}
@@ -498,7 +488,7 @@ export function DialogNew() {
           <text fg={focusedField() === "customCommand" ? theme.primary : theme.textMuted}>
             Custom Command
           </text>
-          <box onMouseUp={() => setFocusedField("customCommand")}>
+          <box>
             <input
               placeholder="e.g., aider, cursor, vim"
               value={customCommand()}
@@ -540,10 +530,6 @@ export function DialogNew() {
           <box
             flexDirection="row"
             gap={1}
-            onMouseUp={() => {
-              setFocusedField("worktree")
-              setUseWorktree(!useWorktree())
-            }}
           >
             <text fg={focusedField() === "worktree" ? theme.primary : theme.textMuted}>
               {useWorktree() ? "[x]" : "[ ]"}
@@ -581,10 +567,6 @@ export function DialogNew() {
                 flexDirection="row"
                 gap={1}
                 paddingLeft={4}
-                onMouseUp={(e) => {
-                  e.stopPropagation()
-                  setUseBaseDevelop(!useBaseDevelop())
-                }}
               >
                 <text fg={useBaseDevelop() ? theme.primary : theme.textMuted}>
                   {useBaseDevelop() ? "[x]" : "[ ]"}
@@ -602,7 +584,6 @@ export function DialogNew() {
           <box
             backgroundColor={theme.error}
             padding={1}
-            onMouseUp={() => setErrorMessage("")}
           >
             <text fg={theme.selectedListItemText} wrapMode="word">
               {errorMessage()}
@@ -616,7 +597,6 @@ export function DialogNew() {
         <box
           backgroundColor={creating() ? theme.backgroundElement : theme.primary}
           padding={1}
-          onMouseUp={handleCreate}
           alignItems="center"
         >
           <text fg={theme.selectedListItemText} attributes={TextAttributes.BOLD}>

@@ -1,14 +1,11 @@
 {
-  "name": "agent-view",
+  "name": "seshions",
   "version": "0.2.0",
   "description": "OpenTUI-based Agent Management",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "agent-view": "./dist/cli/index.js",
-    "av": "./dist/cli/index.js",
-    "agent-orchestrator": "./dist/cli/index.js",
-    "ao": "./dist/cli/index.js"
+    "seshions": "./dist/cli/index.js"
   },
   "scripts": {
     "build": "bun run scripts/build.ts",

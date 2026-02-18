@@ -87,7 +87,7 @@ export function DialogMove(props: DialogMoveProps) {
           <text fg={theme.text} attributes={TextAttributes.BOLD}>
             Move Session
           </text>
-          <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
+          <text fg={theme.textMuted}>
             esc
           </text>
         </box>
@@ -114,11 +114,6 @@ export function DialogMove(props: DialogMoveProps) {
                 paddingLeft={1}
                 paddingRight={1}
                 backgroundColor={isSelected() ? theme.primary : undefined}
-                onMouseUp={() => {
-                  setSelectedIndex(index())
-                  handleSelect()
-                }}
-                onMouseOver={() => setSelectedIndex(index())}
               >
                 {/* Selection indicator */}
                 <text fg={isSelected() ? theme.selectedListItemText : theme.textMuted}>

@@ -1,4 +1,4 @@
-# Agent View
+# Seshions
 
 OpenTUI-based terminal interface for managing and monitoring AI coding agent sessions.
 
@@ -42,21 +42,20 @@ src/
 ### Quick Install (Recommended)
 
 ```bash
-export AGENT_VIEW_REPO="danhergir/seshions"
-curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/install.sh" | bash
+export SESHIONS_REPO="danhergir/seshions"
+curl -fsSL "https://raw.githubusercontent.com/${SESHIONS_REPO}/main/install.sh" | bash
 ```
 
 This will:
 - Download the latest release binary for your platform
-- Install commands into `~/.agent-view/bin`
-- Create `agent-view` and `av` commands
-- Create deprecated compatibility aliases (`agent-orchestrator`, `ao`) for one release
+- Install commands into `~/.seshions/bin`
+- Create the `seshions` command
 
 ### Manual Install
 
 ```bash
 git clone https://github.com/danhergir/seshions.git
-cd agent-view
+cd seshions
 bun install
 bun run build
 ```
@@ -73,21 +72,19 @@ Binaries are output to the `bin/` directory.
 ### Uninstall
 
 ```bash
-export AGENT_VIEW_REPO="danhergir/seshions"
-curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/uninstall.sh" | bash
+export SESHIONS_REPO="danhergir/seshions"
+curl -fsSL "https://raw.githubusercontent.com/${SESHIONS_REPO}/main/uninstall.sh" | bash
 ```
 
 To remove state/config/log data too:
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/${AGENT_VIEW_REPO}/main/uninstall.sh" | bash -s -- --purge-data --purge-legacy-data
+curl -fsSL "https://raw.githubusercontent.com/${SESHIONS_REPO}/main/uninstall.sh" | bash -s -- --purge-data
 ```
 
 ## Compatibility Notes
 
-- Primary commands are `agent-view` and `av`.
-- Legacy commands `agent-orchestrator` and `ao` are supported for one release.
-- Legacy state in `~/.agent-orchestrator` is migrated to `~/.agent-view` on startup when possible.
+- Primary command is `seshions`.
 
 ## Development
 

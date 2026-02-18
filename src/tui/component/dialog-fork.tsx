@@ -205,7 +205,7 @@ export function DialogFork(props: DialogForkProps) {
           <text fg={theme.text} attributes={TextAttributes.BOLD}>
             Fork Session
           </text>
-          <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
+          <text fg={theme.textMuted}>
             esc
           </text>
         </box>
@@ -234,7 +234,7 @@ export function DialogFork(props: DialogForkProps) {
         <text fg={focusedField() === "title" ? theme.primary : theme.textMuted}>
           Fork Title
         </text>
-        <box onMouseUp={() => setFocusedField("title")}>
+        <box>
           <input
             value={title()}
             onInput={setTitle}
@@ -259,10 +259,6 @@ export function DialogFork(props: DialogForkProps) {
           <box
             flexDirection="row"
             gap={1}
-            onMouseUp={() => {
-              setFocusedField("worktree")
-              setUseWorktree(!useWorktree())
-            }}
           >
             <text fg={focusedField() === "worktree" ? theme.primary : theme.textMuted}>
               {useWorktree() ? "[x]" : "[ ]"}
@@ -278,7 +274,7 @@ export function DialogFork(props: DialogForkProps) {
               <text fg={focusedField() === "branch" ? theme.primary : theme.textMuted}>
                 Branch name
               </text>
-              <box onMouseUp={() => setFocusedField("branch")}>
+              <box>
                 <input
                   placeholder="auto-generated from title if empty"
                   value={worktreeBranch()}
@@ -308,7 +304,6 @@ export function DialogFork(props: DialogForkProps) {
         <box
           backgroundColor={forking() || checkingForkEligibility() || !canForkSession() ? theme.backgroundElement : theme.primary}
           padding={1}
-          onMouseUp={canForkSession() ? handleFork : undefined}
           alignItems="center"
         >
           <text fg={canForkSession() ? theme.selectedListItemText : theme.textMuted} attributes={TextAttributes.BOLD}>

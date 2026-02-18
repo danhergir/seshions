@@ -475,11 +475,6 @@ export function Home() {
         paddingRight={1}
         height={1}
         backgroundColor={isSelected() ? theme.primary : theme.backgroundElement}
-        onMouseUp={() => {
-          setSelectedIndex(props.index)
-          sync.group.toggle(props.group.path)
-        }}
-        onMouseOver={() => setSelectedIndex(props.index)}
       >
         {/* Expand/collapse arrow */}
         <text fg={isSelected() ? theme.selectedListItemText : theme.accent}>
@@ -555,11 +550,6 @@ export function Home() {
         paddingRight={1}
         height={1}
         backgroundColor={isSelected() ? theme.primary : undefined}
-        onMouseUp={() => {
-          setSelectedIndex(props.index)
-          handleAttach(props.session)
-        }}
-        onMouseOver={() => setSelectedIndex(props.index)}
       >
         {/* Status icon */}
         <text fg={isSelected() ? theme.selectedListItemText : statusColor()}>

@@ -93,7 +93,7 @@ export function DialogGroup(props: DialogGroupProps) {
           <text fg={theme.text} attributes={TextAttributes.BOLD}>
             {title}
           </text>
-          <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
+          <text fg={theme.textMuted}>
             esc
           </text>
         </box>
@@ -120,7 +120,6 @@ export function DialogGroup(props: DialogGroupProps) {
         <box
           backgroundColor={saving() ? theme.backgroundElement : theme.primary}
           padding={1}
-          onMouseUp={handleSubmit}
           alignItems="center"
         >
           <text fg={theme.selectedListItemText} attributes={TextAttributes.BOLD}>

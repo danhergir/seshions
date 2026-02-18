@@ -27,7 +27,6 @@ export function InputAutocomplete(props: InputAutocompleteProps) {
   const { theme } = useTheme()
   const [selectedIdx, setSelectedIdx] = createSignal(-1)
   const [showSuggestions, setShowSuggestions] = createSignal(false)
-  const [inputMode, setInputMode] = createSignal<"keyboard" | "mouse">("keyboard")
 
   let inputRef: InputRenderable | undefined
 
@@ -66,8 +65,6 @@ export function InputAutocomplete(props: InputAutocompleteProps) {
   function moveSelection(direction: number) {
     const suggestions = visibleSuggestions()
     if (suggestions.length === 0) return
-
-    setInputMode("keyboard")
 
     let next = selectedIdx() + direction
     // Allow -1 to go back to input
@@ -150,29 +147,22 @@ export function InputAutocomplete(props: InputAutocompleteProps) {
 
   return (
     <box>
-      <box
-        onMouseUp={() => {
-          props.onFocus?.()
-          inputRef?.focus()
+      <input
+        placeholder={props.placeholder}
+        value={props.value}
+        onInput={(value) => {
+          props.onInput(value)
+          setShowSuggestions(true)
+          setSelectedIdx(-1)
         }}
-      >
-        <input
-          placeholder={props.placeholder}
-          value={props.value}
-          onInput={(value) => {
-            props.onInput(value)
-            setShowSuggestions(true)
-            setSelectedIdx(-1)
-          }}
-          focusedBackgroundColor={props.focusedBackgroundColor ?? theme.backgroundElement}
-          cursorColor={props.cursorColor ?? theme.primary}
-          focusedTextColor={props.focusedTextColor ?? theme.text}
-          ref={(r) => {
-            inputRef = r
-            props.ref?.(r)
-          }}
-        />
-      </box>
+        focusedBackgroundColor={props.focusedBackgroundColor ?? theme.backgroundElement}
+        cursorColor={props.cursorColor ?? theme.primary}
+        focusedTextColor={props.focusedTextColor ?? theme.text}
+        ref={(r) => {
+          inputRef = r
+          props.ref?.(r)
+        }}
+      />
       <Show when={showSuggestions() && visibleSuggestions().length > 0}>
         <box paddingTop={0} paddingLeft={1}>
           <For each={visibleSuggestions()}>
@@ -182,13 +172,6 @@ export function InputAutocomplete(props: InputAutocompleteProps) {
               return (
                 <box
                   flexDirection="row"
-                  onMouseMove={() => setInputMode("mouse")}
-                  onMouseOver={() => {
-                    if (inputMode() === "mouse") {
-                      setSelectedIdx(idx())
-                    }
-                  }}
-                  onMouseUp={() => selectSuggestion(suggestion)}
                   backgroundColor={isSelected() ? theme.primary : RGBA.fromInts(0, 0, 0, 0)}
                   paddingLeft={1}
                   paddingRight={1}

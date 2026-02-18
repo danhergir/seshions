@@ -69,7 +69,7 @@ export function DialogRename(props: DialogRenameProps) {
           <text fg={theme.text} attributes={TextAttributes.BOLD}>
             Rename Session
           </text>
-          <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
+          <text fg={theme.textMuted}>
             esc
           </text>
         </box>
@@ -96,7 +96,6 @@ export function DialogRename(props: DialogRenameProps) {
         <box
           backgroundColor={saving() ? theme.backgroundElement : theme.primary}
           padding={1}
-          onMouseUp={handleRename}
           alignItems="center"
         >
           <text fg={theme.selectedListItemText} attributes={TextAttributes.BOLD}>

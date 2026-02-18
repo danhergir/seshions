@@ -7,12 +7,7 @@ import { Database } from "bun:sqlite"
 import path from "path"
 import fs from "fs"
 import type { Session, Group, StatusUpdate, Tool, SessionStatus } from "./types"
-import {
-  resolveStateDbPathWithFallback,
-  getLegacyStateDbPath,
-  getStateDbPath,
-  COMPATIBILITY_WINDOW_NOTICE
-} from "./app-paths"
+import { getStateDbPath } from "./app-paths"
 
 const SCHEMA_VERSION = 1
 
@@ -44,13 +39,7 @@ export class Storage {
   }
 
   private getDefaultPath(): string {
-    const resolved = resolveStateDbPathWithFallback()
-    if (resolved.usingLegacy) {
-      console.warn(
-        `[deprecation] Using legacy state DB '${getLegacyStateDbPath()}' instead of '${getStateDbPath()}'. ${COMPATIBILITY_WINDOW_NOTICE}`
-      )
-    }
-    return resolved.path
+    return getStateDbPath()
   }
 
   migrate(): void {

@@ -7,9 +7,7 @@ import { render, useKeyboard, useRenderer, useTerminalDimensions } from "@opentu
 import fs from "fs"
 import {
   ensureAppDirSync,
-  getDebugLogPath,
-  migrateLegacyAppData,
-  COMPATIBILITY_WINDOW_NOTICE
+  getDebugLogPath
 } from "@/core/app-paths"
 
 // File logger for debugging
@@ -48,17 +46,7 @@ export interface TuiOptions {
 }
 
 export async function tui(options: TuiOptions = {}) {
-  const migration = await migrateLegacyAppData()
-  if (migration.migrated.length > 0) {
-    console.warn(
-      `[deprecation] Migrated legacy app data (${migration.migrated.join(", ")}). ${COMPATIBILITY_WINDOW_NOTICE}`
-    )
-  }
-  if (migration.warnings.length > 0) {
-    console.warn(`Warning: Legacy data migration issues: ${migration.warnings.join("; ")}`)
-  }
-
-  log("=== Agent View starting ===")
+  log("=== Seshions starting ===")
 
   // Check tmux availability
   const tmuxOk = await isTmuxAvailable()
@@ -72,7 +60,7 @@ export async function tui(options: TuiOptions = {}) {
   storage.migrate()
   setStorage(storage)
 
-  // Load config from ~/.agent-view/config.json
+  // Load config from ~/.seshions/config.json
   await loadConfig()
 
   const mode = options.mode ?? (await detectTerminalMode())
@@ -254,7 +242,7 @@ function ErrorComponent(props: { error: Error }) {
   const dimensions = useTerminalDimensions()
 
   useKeyboard((evt) => {
-    if (evt.ctrl && evt.name === "c") {
+    if (evt.name === "q" || evt.name === "escape") {
       process.exit(1)
     }
   })
@@ -273,7 +261,7 @@ function ErrorComponent(props: { error: Error }) {
       </text>
       <text fg="#cdd6f4">{props.error.message}</text>
       <text fg="#6c7086">{props.error.stack}</text>
-      <text fg="#6c7086">Press Ctrl+C to exit</text>
+      <text fg="#6c7086">Press Q or Esc to exit</text>
     </box>
   )
 }

@@ -15,7 +15,7 @@ import {
 } from "./config"
 
 describe("config", () => {
-  const testConfigDir = path.join(os.tmpdir(), `agent-view-test-${Date.now()}`)
+  const testConfigDir = path.join(os.tmpdir(), `seshions-test-${Date.now()}`)
   const testConfigPath = path.join(testConfigDir, "config.json")
 
   // Store original values to restore after tests
@@ -61,14 +61,14 @@ describe("config", () => {
   describe("getConfigDir", () => {
     test("returns path in home directory", () => {
       const dir = getConfigDir()
-      expect(dir).toBe(path.join(os.homedir(), ".agent-view"))
+      expect(dir).toBe(path.join(os.homedir(), ".seshions"))
     })
   })
 
   describe("getConfigPath", () => {
     test("returns config.json path", () => {
       const configPath = getConfigPath()
-      expect(configPath).toBe(path.join(os.homedir(), ".agent-view", "config.json"))
+      expect(configPath).toBe(path.join(os.homedir(), ".seshions", "config.json"))
     })
   })
 

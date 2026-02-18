@@ -112,7 +112,6 @@ function ToastContainer(props: { toasts: Toast[]; onDismiss: (id: string) => voi
               backgroundColor={theme.backgroundPanel}
               padding={1}
               width={40}
-              onMouseUp={() => props.onDismiss(toast.id)}
             >
               <box flexDirection="column" gap={0}>
                 <Show when={toast.title}>

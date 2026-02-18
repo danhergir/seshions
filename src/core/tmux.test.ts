@@ -22,7 +22,7 @@ describe("generateSessionName", () => {
   test("sanitizes special characters", () => {
     const name = generateSessionName("My Feature!")
     // Should only contain alphanumeric, dashes, and underscores
-    expect(name).toMatch(/^agentview_[a-z0-9-]+-[a-z0-9]+$/)
+    expect(name).toMatch(/^seshions_[a-z0-9-]+-[a-z0-9]+$/)
   })
 
   test("converts to lowercase", () => {
@@ -211,6 +211,6 @@ describe("session cache", () => {
 
 describe("SESSION_PREFIX constant", () => {
   test("has expected value", () => {
-    expect(SESSION_PREFIX).toBe("agentview_")
+    expect(SESSION_PREFIX).toBe("seshions_")
   })
 })

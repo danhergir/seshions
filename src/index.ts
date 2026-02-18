@@ -1,45 +1,32 @@
 /**
- * Agent View
+ * Seshions
  * OpenTUI-based multi-agent management
  */
 
 import { tui } from "./tui/app"
-import { basename } from "path"
 import packageJson from "../package.json"
-import { getLegacyCommandWarning } from "./core/app-paths"
 
 async function main() {
   const args = process.argv.slice(2)
-  const invokedFromEnv = process.env._ ? basename(process.env._) : ""
-  const invokedName = invokedFromEnv || basename(process.argv[1] || "")
-  const legacyCommandWarning = getLegacyCommandWarning(invokedName)
-
-  if (legacyCommandWarning) {
-    console.error(legacyCommandWarning)
-  }
 
   // Simple CLI argument handling
   if (args.includes("--help") || args.includes("-h")) {
     console.log(`
-Agent View - Terminal Agent Management
+Seshions - Terminal Agent Management
 
 Usage:
-  agent-view [options]
+  seshions [options]
 
 Options:
   --help, -h     Show this help message
   --version, -v  Show version
   --light        Use light mode theme
 
-Compatibility (deprecated, one release only):
-  agent-orchestrator
-  ao
-
 Keyboard Shortcuts (in TUI):
-  Ctrl+K         Command palette
+  Ctrl+K         Action Hub
   Ctrl+L         Session list
-  N              New session
-  Q              Quit / Detach
+  N              Launch session
+  Q              Close / Detach
   ?              Help
 `)
     process.exit(0)
