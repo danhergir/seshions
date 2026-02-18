@@ -16,7 +16,7 @@
     "uninstall.sh"
   ],
   "bin": {
-    "seshions": "./launcher/seshions.js"
+    "seshions": "launcher/seshions.js"
   },
   "scripts": {
     "build": "bun run scripts/build.ts",
