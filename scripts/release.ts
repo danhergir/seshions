@@ -3,8 +3,9 @@
  * Release script for agent-view
  *
  * Usage:
- *   bun run scripts/release.ts 1.0.0           # Release version 1.0.0
- *   bun run scripts/release.ts 1.0.0 --draft   # Create draft release
+ *   bun run scripts/release.ts 1.0.0                          # Release version 1.0.0 (current platform binary)
+ *   bun run scripts/release.ts 1.0.0 --all-platforms          # Release version 1.0.0 (all platform binaries)
+ *   bun run scripts/release.ts 1.0.0 --draft                  # Create draft release
  */
 
 import { $ } from "bun"
@@ -20,6 +21,7 @@ async function main() {
   const args = process.argv.slice(2)
   const version = args.find(a => !a.startsWith("--"))
   const isDraft = args.includes("--draft")
+  const compileAllPlatforms = args.includes("--all-platforms")
 
   if (!version) {
     console.error("Usage: bun run scripts/release.ts <version> [--draft]")
@@ -44,17 +46,23 @@ async function main() {
   pkg.version = version.replace(/^v/, "")
   await Bun.write("package.json", JSON.stringify(pkg, null, 2) + "\n")
 
-  // Step 2: Compile all binaries
-  console.log("🔨 Compiling binaries for all platforms...")
-  const compileResult = await $`bun run compile:all`.quiet()
+  // Step 2: Compile binaries
+  console.log(
+    compileAllPlatforms
+      ? "🔨 Compiling binaries for all platforms..."
+      : "🔨 Compiling binary for current platform..."
+  )
+  const compileResult = compileAllPlatforms
+    ? await $`bun run compile:all`.quiet()
+    : await $`bun run compile`.quiet()
   if (compileResult.exitCode !== 0) {
     console.error("Compilation failed")
     process.exit(1)
   }
   console.log("   ✅ Binaries compiled")
 
-  // Step 3: Check for uncommitted changes
-  const status = await $`git status --porcelain`.text()
+  // Step 3: Check for package version change
+  const status = await $`git status --porcelain package.json`.text()
   if (status.trim()) {
     console.log("📝 Committing version bump...")
     await $`git add package.json`
