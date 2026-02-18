@@ -3,7 +3,7 @@
  * Attached session with output display and input
  */
 
-import { createSignal, createEffect, Show, onCleanup, createMemo } from "solid-js"
+import { createSignal, createEffect, Show, onCleanup, onMount, createMemo } from "solid-js"
 import { TextAttributes, InputRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { useTerminalDimensions, useKeyboard } from "@opentui/solid"
 import { useTheme } from "@tui/context/theme"
@@ -16,6 +16,7 @@ import { DialogRename } from "@tui/component/dialog-rename"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import { getSessionManager } from "@/core/session"
 import type { Session as SessionType, SessionStatus } from "@/core/types"
+import { splitSessionPane } from "@/core/tmux"
 import { SessionHeader } from "./header"
 import { SessionFooter } from "./footer"
 
@@ -45,6 +46,30 @@ export function Session() {
 
   let inputRef: InputRenderable
   let scrollRef: ScrollBoxRenderable
+
+  onMount(() => {
+    const unregister = command.register(() => [
+      {
+        title: "Split terminal here",
+        value: `session.split.${sessionId()}`,
+        category: "Workspace",
+        onSelect: async () => {
+          const currentSession = session()
+          if (!currentSession?.tmuxSession) {
+            toast.show({ message: "Session has no active tmux session", variant: "error", duration: 2200 })
+            return
+          }
+          try {
+            await splitSessionPane(currentSession.tmuxSession)
+            toast.show({ message: "Opened terminal split", variant: "success", duration: 1500 })
+          } catch (err) {
+            toast.error(err as Error)
+          }
+        }
+      }
+    ])
+    onCleanup(() => unregister())
+  })
 
   // Fetch output periodically
   createEffect(() => {
@@ -91,7 +116,9 @@ export function Session() {
   // Keyboard shortcuts
   useKeyboard((evt) => {
     if (evt.name === "q" && !inputRef?.focused) {
-      route.navigate({ type: "home" })
+      command.trigger("app.exit")
+      evt.preventDefault()
+      evt.stopPropagation()
     }
     if (evt.name === "R" && evt.shift && !inputRef?.focused) {
       const s = session()

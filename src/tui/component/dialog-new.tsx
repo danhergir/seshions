@@ -2,7 +2,7 @@
  * New session dialog with Tab navigation and worktree support
  */
 
-import { createSignal, createEffect, For, Show, onCleanup } from "solid-js"
+import { createSignal, createEffect, createMemo, For, Show, onCleanup } from "solid-js"
 import { TextAttributes, InputRenderable } from "@opentui/core"
 import { useKeyboard, useRenderer } from "@opentui/solid"
 import { useTheme } from "@tui/context/theme"
@@ -12,11 +12,12 @@ import { useConfig } from "@tui/context/config"
 import { useDialog } from "@tui/ui/dialog"
 import { useToast } from "@tui/ui/toast"
 import { InputAutocomplete } from "@tui/ui/input-autocomplete"
+import { DialogTemplateManager } from "@tui/component/dialog-template"
 import { attachSessionSync } from "@/core/tmux"
 import { isGitRepo, getRepoRoot, createWorktree, generateBranchName, generateWorktreePath, sanitizeBranchName, branchExists } from "@/core/git"
 import { HistoryManager } from "@/core/history"
 import { getStorage } from "@/core/storage"
-import type { Tool, ClaudeSessionMode } from "@/core/types"
+import type { Tool, ClaudeSessionMode, SessionTemplate } from "@/core/types"
 import { getToolCommand } from "@/core/types"
 import { exec } from "child_process"
 import { promisify } from "util"
@@ -60,7 +61,11 @@ const TOOLS: { value: Tool; label: string; description: string }[] = [
 
 type FocusField = "title" | "tool" | "resumeSession" | "customCommand" | "path" | "worktree" | "branch"
 
-export function DialogNew() {
+interface DialogNewProps {
+  templateId?: string
+}
+
+export function DialogNew(props: DialogNewProps = {}) {
   const dialog = useDialog()
   const route = useRoute()
   const sync = useSync()
@@ -82,6 +87,8 @@ export function DialogNew() {
   const [statusMessage, setStatusMessage] = createSignal("")
   const [spinnerFrame, setSpinnerFrame] = createSignal(0)
   const [errorMessage, setErrorMessage] = createSignal("")
+  const [selectedTemplateId, setSelectedTemplateId] = createSignal(props.templateId ?? "")
+  const [initialTemplateApplied, setInitialTemplateApplied] = createSignal(false)
 
   // Spinner animation frames
   const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -109,6 +116,13 @@ export function DialogNew() {
   // Storage for history
   const storage = getStorage()
 
+  const templates = createMemo(() => config().templates ?? [])
+  const activeTemplate = createMemo(() => {
+    const id = selectedTemplateId()
+    if (!id) return undefined
+    return templates().find((template) => template.id === id)
+  })
+
   // Focus state for Tab navigation
   const [focusedField, setFocusedField] = createSignal<FocusField>("title")
   const [toolIndex, setToolIndex] = createSignal(defaultToolIndex >= 0 ? defaultToolIndex : 0)
@@ -123,6 +137,32 @@ export function DialogNew() {
   createEffect(() => {
     if (selectedTool() !== "claude") {
       setClaudeSessionMode("new")
+    }
+  })
+
+  function applyTemplate(template: SessionTemplate) {
+    setSelectedTemplateId(template.id)
+    setSelectedTool(template.tool)
+    const nextToolIndex = TOOLS.findIndex((tool) => tool.value === template.tool)
+    if (nextToolIndex >= 0) {
+      setToolIndex(nextToolIndex)
+    }
+    setProjectPath(template.projectPath || process.cwd())
+    setCustomCommand(template.customCommand ?? "")
+    setUseWorktree(!!template.useWorktree)
+    setWorktreeBranch(template.worktreeBranch ?? "")
+    setClaudeSessionMode(template.claudeOptions?.sessionMode ?? "new")
+    setErrorMessage("")
+  }
+
+  createEffect(() => {
+    if (initialTemplateApplied()) return
+    const templateId = props.templateId
+    if (!templateId) return
+    const template = templates().find((item) => item.id === templateId)
+    if (template) {
+      applyTemplate(template)
+      setInitialTemplateApplied(true)
     }
   })
 
@@ -278,15 +318,20 @@ export function DialogNew() {
         sessionMode: claudeSessionMode()
       } : undefined
 
+      const template = activeTemplate()
+      const startupActions = template?.startupActions ?? []
+
       const session = await sync.session.create({
         title: title() || undefined,
         tool: selectedTool(),
         command: selectedTool() === "custom" ? customCommand() : undefined,
+        groupPath: template?.groupPath || undefined,
         projectPath: sessionProjectPath,
         worktreePath,
         worktreeRepo,
         worktreeBranch: worktreeBranchName,
-        claudeOptions
+        claudeOptions,
+        startupActions
       })
 
       // Save to history for autocomplete suggestions
@@ -401,12 +446,49 @@ export function DialogNew() {
       <box paddingLeft={4} paddingRight={4}>
         <box flexDirection="row" justifyContent="space-between">
           <text fg={theme.text} attributes={TextAttributes.BOLD}>
-            New Session
+            Launch Session
           </text>
           <text fg={theme.textMuted} onMouseUp={() => dialog.clear()}>
             esc
           </text>
         </box>
+      </box>
+
+      {/* Template selector */}
+      <box paddingLeft={4} paddingRight={4} paddingTop={1} gap={1}>
+        <text fg={theme.textMuted}>Template (optional)</text>
+        <box
+          flexDirection="row"
+          justifyContent="space-between"
+          backgroundColor={theme.backgroundElement}
+          padding={1}
+          onMouseUp={() => {
+            dialog.push(() => (
+              <DialogTemplateManager
+                title="Choose Template"
+                onApply={(template) => {
+                  applyTemplate(template)
+                  dialog.pop()
+                }}
+              />
+            ))
+          }}
+        >
+          <text fg={theme.text}>
+            {activeTemplate()?.name ?? "No template selected"}
+          </text>
+          <text fg={theme.primary}>select</text>
+        </box>
+        <Show when={activeTemplate()}>
+          <text
+            fg={theme.textMuted}
+            onMouseUp={() => {
+              setSelectedTemplateId("")
+            }}
+          >
+            clear template
+          </text>
+        </Show>
       </box>
 
       {/* Title field */}
@@ -620,7 +702,7 @@ export function DialogNew() {
           alignItems="center"
         >
           <text fg={theme.selectedListItemText} attributes={TextAttributes.BOLD}>
-            {creating() ? `${spinnerFrames[spinnerFrame()]} ${statusMessage()}` : "Create Session"}
+            {creating() ? `${spinnerFrames[spinnerFrame()]} ${statusMessage()}` : "Launch Session"}
           </text>
         </box>
       </box>
@@ -628,7 +710,7 @@ export function DialogNew() {
       {/* Footer with keybind hints */}
       <box paddingLeft={4} paddingRight={4} paddingTop={1}>
         <text fg={theme.textMuted}>
-          {creating() ? statusMessage() : "Tab | Enter: create"}
+          {creating() ? statusMessage() : "Tab | Enter: launch"}
         </text>
       </box>
     </box>

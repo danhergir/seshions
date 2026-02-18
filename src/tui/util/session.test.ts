@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test"
+import { describe, test, expect } from "vitest"
 import { sortSessionsByCreatedAt } from "./session"
 import type { Session } from "@/core/types"
 

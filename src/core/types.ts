@@ -1,5 +1,5 @@
 /**
- * Core types for Agent View
+ * Core types for Seshions
  */
 
 export type SessionStatus =
@@ -73,6 +73,23 @@ export interface ClaudeOptions {
   sessionMode: ClaudeSessionMode
 }
 
+export interface TemplateStartupAction {
+  command: string
+}
+
+export interface SessionTemplate {
+  id: string
+  name: string
+  tool: Tool
+  projectPath: string
+  groupPath?: string
+  customCommand?: string
+  useWorktree?: boolean
+  worktreeBranch?: string
+  claudeOptions?: ClaudeOptions
+  startupActions?: TemplateStartupAction[]
+}
+
 export interface SessionCreateOptions {
   title?: string
   projectPath: string
@@ -85,6 +102,7 @@ export interface SessionCreateOptions {
   worktreeRepo?: string
   worktreeBranch?: string
   claudeOptions?: ClaudeOptions
+  startupActions?: TemplateStartupAction[]
 }
 
 export interface SessionForkOptions {
@@ -109,6 +127,7 @@ export interface Config {
   worktree?: WorktreeConfig
   mcpServers?: MCPServer[]
   keybinds?: Record<string, string>
+  templates?: SessionTemplate[]
 }
 
 export function getToolCommand(tool: Tool, customCmd?: string): string {

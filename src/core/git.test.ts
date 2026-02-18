@@ -1,6 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, mock, spyOn } from "bun:test"
-import * as os from "os"
-import * as path from "path"
+import { describe, test, expect } from "vitest"
 
 import {
   validateBranchName,

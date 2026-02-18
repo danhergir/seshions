@@ -1,40 +1,30 @@
 {
-  "name": "agent-view",
-  "version": "0.2.0",
-  "description": "OpenTUI-based Agent Management",
-  "type": "module",
+  "name": "seshions",
+  "version": "0.3.0",
+  "description": "Terminal session orchestrator for coding agents",
+  "type": "commonjs",
   "main": "dist/index.js",
   "bin": {
-    "agent-view": "./dist/cli/index.js",
-    "av": "./dist/cli/index.js",
-    "agent-orchestrator": "./dist/cli/index.js",
-    "ao": "./dist/cli/index.js"
+    "seshions": "./dist/cli/index.js"
   },
   "scripts": {
-    "build": "bun run scripts/build.ts",
-    "compile": "bun run scripts/compile.ts",
-    "compile:all": "bun run scripts/compile.ts --all",
-    "release": "bun run scripts/release.ts",
-    "dev": "bun run scripts/build.ts && bun run dist/index.js",
-    "start": "bun run dist/index.js",
-    "test": "bun test",
-    "test:watch": "bun test --watch",
+    "build": "tsc -p tsconfig.json",
+    "compile": "node scripts/compile.mjs",
+    "compile:all": "node scripts/compile.mjs --all",
+    "release": "node scripts/release.mjs",
+    "dev": "npm run build && node dist/index.js",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@opentui/core": "^0.1.79",
-    "@opentui/solid": "^0.1.79",
     "fuzzysort": "^3.0.0",
-    "node-pty": "1.0.0",
-    "remeda": "^2.0.0",
-    "solid-js": "^1.9.0"
+    "node-pty": "1.0.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.24.0",
-    "@babel/preset-typescript": "^7.24.0",
-    "@tsconfig/bun": "^1.0.0",
-    "@types/bun": "latest",
-    "babel-preset-solid": "^1.8.0",
-    "typescript": "^5.3.0"
+    "@types/node": "^22.13.10",
+    "typescript": "^5.3.0",
+    "vitest": "^2.1.8"
   }
 }

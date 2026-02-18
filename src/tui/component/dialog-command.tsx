@@ -1,5 +1,5 @@
 /**
- * Command palette dialog
+ * Action hub dialog
  * Central command registration and execution
  */
 
@@ -66,6 +66,7 @@ export function CommandProvider(props: ParentProps) {
       }
     },
     open() {
+      refreshCommands()
       dialog.replace(() => <DialogCommand commands={state.commands} />)
     }
   }
@@ -105,8 +106,8 @@ function DialogCommand(props: { commands: Command[] }) {
 
   return (
     <DialogSelect
-      title="Commands"
-      placeholder="Search commands..."
+      title="Action Hub"
+      placeholder="Search actions..."
       options={options()}
       flat
     />

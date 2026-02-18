@@ -1,15 +1,13 @@
 /**
- * Configuration loader for agent-view
- * Reads from ~/.agent-view/config.json
+ * Configuration loader for seshions
+ * Reads from ~/.seshions/config.json
  */
 
 import * as fs from "fs/promises"
-import type { Tool } from "./types"
+import type { Tool, SessionTemplate } from "./types"
 import {
   getAppDir,
-  getConfigPath as getPrimaryConfigPath,
-  getLegacyConfigPath,
-  COMPATIBILITY_WINDOW_NOTICE
+  getConfigPath as getPrimaryConfigPath
 } from "./app-paths"
 
 export interface WorktreeConfig {
@@ -22,11 +20,11 @@ export interface AppConfig {
   theme?: string
   worktree?: WorktreeConfig
   defaultGroup?: string
+  templates?: SessionTemplate[]
 }
 
 const CONFIG_DIR = getAppDir()
 const CONFIG_PATH = getPrimaryConfigPath()
-const LEGACY_CONFIG_PATH = getLegacyConfigPath()
 
 const DEFAULT_CONFIG: AppConfig = {
   defaultTool: "claude",
@@ -35,7 +33,8 @@ const DEFAULT_CONFIG: AppConfig = {
     defaultBaseBranch: "main",
     autoCleanup: true
   },
-  defaultGroup: "default"
+  defaultGroup: "default",
+  templates: []
 }
 
 // Cached config for sync access
@@ -67,37 +66,13 @@ export async function loadConfig(): Promise<AppConfig> {
       worktree: {
         ...DEFAULT_CONFIG.worktree,
         ...parsed.worktree
-      }
+      },
+      templates: parsed.templates ?? DEFAULT_CONFIG.templates
     }
 
     return cachedConfig
   } catch (err: any) {
     if (err.code === "ENOENT") {
-      try {
-        const legacyContent = await fs.readFile(LEGACY_CONFIG_PATH, "utf-8")
-        const parsed = JSON.parse(legacyContent) as Partial<AppConfig>
-
-        cachedConfig = {
-          ...DEFAULT_CONFIG,
-          ...parsed,
-          worktree: {
-            ...DEFAULT_CONFIG.worktree,
-            ...parsed.worktree
-          }
-        }
-
-        console.warn(
-          `[deprecation] Loaded config from legacy path '${LEGACY_CONFIG_PATH}'. ${COMPATIBILITY_WINDOW_NOTICE}`
-        )
-        return cachedConfig
-      } catch (legacyErr: any) {
-        if (legacyErr.code !== "ENOENT") {
-          console.warn(
-            `Warning: Failed to load legacy config from ${LEGACY_CONFIG_PATH}: ${legacyErr.message}`
-          )
-        }
-      }
-
       cachedConfig = { ...DEFAULT_CONFIG }
       return cachedConfig
     }

@@ -7,9 +7,7 @@ import { render, useKeyboard, useRenderer, useTerminalDimensions } from "@opentu
 import fs from "fs"
 import {
   ensureAppDirSync,
-  getDebugLogPath,
-  migrateLegacyAppData,
-  COMPATIBILITY_WINDOW_NOTICE
+  getDebugLogPath
 } from "@/core/app-paths"
 
 // File logger for debugging
@@ -19,12 +17,12 @@ function log(...args: unknown[]) {
   const msg = `[${new Date().toISOString()}] ${args.map(a => typeof a === "object" ? JSON.stringify(a) : String(a)).join(" ")}\n`
   fs.appendFileSync(logFile, msg)
 }
-import { Switch, Match, createEffect, ErrorBoundary, Show, onMount } from "solid-js"
+import { Switch, Match, createMemo, ErrorBoundary, onMount } from "solid-js"
 import { RouteProvider, useRoute } from "@tui/context/route"
 import { SyncProvider, useSync } from "@tui/context/sync"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
-import { KeybindProvider, useKeybind } from "@tui/context/keybind"
-import { KVProvider, useKV } from "@tui/context/kv"
+import { KeybindProvider } from "@tui/context/keybind"
+import { KVProvider } from "@tui/context/kv"
 import { ConfigProvider } from "@tui/context/config"
 import { loadConfig } from "@/core/config"
 import { DialogProvider, useDialog } from "@tui/ui/dialog"
@@ -32,10 +30,12 @@ import { ToastProvider, useToast } from "@tui/ui/toast"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
 import { DialogSessions } from "@tui/component/dialog-sessions"
 import { DialogNew } from "@tui/component/dialog-new"
+import { DialogTemplateEditor, DialogTemplateManager } from "@tui/component/dialog-template"
+import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
-import { getStorage, setStorage, Storage } from "@/core/storage"
-import { isTmuxAvailable } from "@/core/tmux"
+import { setStorage, Storage } from "@/core/storage"
+import { isTmuxAvailable, killSession, splitSessionPane } from "@/core/tmux"
 
 async function detectTerminalMode(): Promise<"dark" | "light"> {
   // Simple detection - could be enhanced
@@ -48,17 +48,7 @@ export interface TuiOptions {
 }
 
 export async function tui(options: TuiOptions = {}) {
-  const migration = await migrateLegacyAppData()
-  if (migration.migrated.length > 0) {
-    console.warn(
-      `[deprecation] Migrated legacy app data (${migration.migrated.join(", ")}). ${COMPATIBILITY_WINDOW_NOTICE}`
-    )
-  }
-  if (migration.warnings.length > 0) {
-    console.warn(`Warning: Legacy data migration issues: ${migration.warnings.join("; ")}`)
-  }
-
-  log("=== Agent View starting ===")
+  log("=== Seshions starting ===")
 
   // Check tmux availability
   const tmuxOk = await isTmuxAvailable()
@@ -72,7 +62,7 @@ export async function tui(options: TuiOptions = {}) {
   storage.migrate()
   setStorage(storage)
 
-  // Load config from ~/.agent-view/config.json
+  // Load config from ~/.seshions/config.json
   await loadConfig()
 
   const mode = options.mode ?? (await detectTerminalMode())
@@ -80,6 +70,15 @@ export async function tui(options: TuiOptions = {}) {
   return new Promise<void>((resolve) => {
     const onExit = async () => {
       try {
+        const sessions = storage.loadSessions()
+        const tmuxSessions = Array.from(
+          new Set(sessions.map((session) => session.tmuxSession).filter(Boolean))
+        )
+
+        for (const tmuxSession of tmuxSessions) {
+          await killSession(tmuxSession)
+        }
+
         storage.close()
         await options.onExit?.()
       } catch (e) {
@@ -123,6 +122,7 @@ export async function tui(options: TuiOptions = {}) {
       {
         targetFps: 60,
         exitOnCtrlC: false,
+        useMouse: false,
         autoFocus: false,
         useKittyKeyboard: {},
         openConsoleOnError: true
@@ -140,7 +140,6 @@ function App(props: { onExit: () => Promise<void> }) {
   const command = useCommandDialog()
   const sync = useSync()
   const toast = useToast()
-  const keybind = useKeybind()
   const renderer = useRenderer()
 
   log("App initialized, route:", route.data.type, "dimensions:", dimensions().width, "x", dimensions().height)
@@ -154,7 +153,7 @@ function App(props: { onExit: () => Promise<void> }) {
   onMount(() => {
     command.register(() => [
       {
-        title: "Switch session",
+        title: "Jump to session",
         value: "session.list",
         category: "Session",
         keybind: "Ctrl+L",
@@ -164,7 +163,7 @@ function App(props: { onExit: () => Promise<void> }) {
         }
       },
       {
-        title: "New session",
+        title: "Launch session",
         value: "session.new",
         category: "Session",
         keybind: "N",
@@ -174,7 +173,85 @@ function App(props: { onExit: () => Promise<void> }) {
         }
       },
       {
-        title: "Go home",
+        title: "Launch from template",
+        value: "template.launch",
+        category: "Templates",
+        onSelect: () => {
+          dialog.replace(() => (
+            <DialogTemplateManager
+              title="Launch From Template"
+              onApply={(template) => {
+                dialog.replace(() => <DialogNew templateId={template.id} />)
+              }}
+            />
+          ))
+        }
+      },
+      {
+        title: "Create template",
+        value: "template.create",
+        category: "Templates",
+        onSelect: () => {
+          dialog.replace(() => <DialogTemplateEditor />)
+        }
+      },
+      {
+        title: "Manage templates",
+        value: "template.manage",
+        category: "Templates",
+        onSelect: () => {
+          dialog.replace(() => <DialogTemplateManager />)
+        }
+      },
+      {
+        title: "Split terminal in current session",
+        value: "session.split.current",
+        category: "Workspace",
+        onSelect: async () => {
+          if (route.data.type !== "session") {
+            toast.show({ message: "Open a session view first", variant: "info", duration: 2000 })
+            return
+          }
+          const currentSession = sync.session.get(route.data.sessionId)
+          if (!currentSession?.tmuxSession) {
+            toast.show({ message: "Session has no active tmux session", variant: "error", duration: 2200 })
+            return
+          }
+          try {
+            await splitSessionPane(currentSession.tmuxSession)
+            toast.show({ message: "Opened terminal split", variant: "success", duration: 1500 })
+          } catch (err) {
+            toast.error(err as Error)
+          }
+        }
+      },
+      {
+        title: "Split terminal in another session",
+        value: "session.split.pick",
+        category: "Workspace",
+        onSelect: () => {
+          dialog.replace(() => (
+            <DialogSessionSplit
+              onSplit={async (sessionId) => {
+                const session = sync.session.get(sessionId)
+                if (!session?.tmuxSession) {
+                  toast.show({ message: "Session has no active tmux session", variant: "error", duration: 2200 })
+                  return
+                }
+                try {
+                  await splitSessionPane(session.tmuxSession)
+                  toast.show({ message: `Opened split in ${session.title}`, variant: "success", duration: 1800 })
+                  dialog.clear()
+                } catch (err) {
+                  toast.error(err as Error)
+                }
+              }}
+            />
+          ))
+        }
+      },
+      {
+        title: "Workspace home",
         value: "nav.home",
         category: "Navigation",
         onSelect: () => {
@@ -183,7 +260,7 @@ function App(props: { onExit: () => Promise<void> }) {
         }
       },
       {
-        title: "Exit",
+        title: "Close app",
         value: "app.exit",
         category: "System",
         keybind: "Q",
@@ -198,10 +275,6 @@ function App(props: { onExit: () => Promise<void> }) {
     log("App useKeyboard:", evt.name, "ctrl:", evt.ctrl)
 
     if (dialog.stack.length > 0) return
-
-    if (evt.ctrl && evt.name === "c") {
-      props.onExit()
-    }
 
     if (evt.ctrl && evt.name === "k") {
       command.open()
@@ -225,7 +298,7 @@ function App(props: { onExit: () => Promise<void> }) {
     if (evt.name === "?") {
       toast.show({
         title: "Help",
-        message: "Ctrl+K: Commands | L: Sessions | N: New | Q: Quit",
+        message: "Ctrl+K: Action Hub | L: Sessions | N: Launch | Q: Close",
         variant: "info",
         duration: 5000
       })
@@ -250,14 +323,34 @@ function App(props: { onExit: () => Promise<void> }) {
   )
 }
 
+function DialogSessionSplit(props: { onSplit: (sessionId: string) => void | Promise<void> }) {
+  const sync = useSync()
+
+  const selectOptions = createMemo<DialogSelectOption<string>[]>(() => {
+    return sync.session.list().filter((session) => !!session.tmuxSession).map((session) => ({
+      title: session.title,
+      value: session.id,
+      category: "Sessions",
+      description: session.projectPath,
+      footer: session.status
+    }))
+  })
+
+  return (
+    <DialogSelect
+      title="Split Terminal In Session"
+      placeholder="Select session..."
+      options={selectOptions()}
+      flat
+      onSelect={(option) => {
+        void props.onSplit(option.value)
+      }}
+    />
+  )
+}
+
 function ErrorComponent(props: { error: Error }) {
   const dimensions = useTerminalDimensions()
-
-  useKeyboard((evt) => {
-    if (evt.ctrl && evt.name === "c") {
-      process.exit(1)
-    }
-  })
 
   return (
     <box
@@ -273,7 +366,7 @@ function ErrorComponent(props: { error: Error }) {
       </text>
       <text fg="#cdd6f4">{props.error.message}</text>
       <text fg="#6c7086">{props.error.stack}</text>
-      <text fg="#6c7086">Press Ctrl+C to exit</text>
+      <text fg="#6c7086">Close and relaunch the app</text>
     </box>
   )
 }

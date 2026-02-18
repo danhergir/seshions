@@ -139,13 +139,15 @@ export class SessionManager {
         name: tmuxName,
         command,
         cwd: options.projectPath,
+        startupCommands: (options.startupActions ?? []).map((action) => action.command),
         env: {
-          AGENT_ORCHESTRATOR_SESSION: id
+          SESHIONS_SESSION: id
         }
       })
       log("tmux session created successfully")
     } catch (err) {
       log("tmux.createSession error:", err)
+      await tmux.killSession(tmuxName)
       throw err
     }
 
@@ -153,6 +155,9 @@ export class SessionManager {
     const toolData: Record<string, unknown> = {}
     if (options.tool === "claude" && options.claudeOptions) {
       toolData.claudeSessionMode = options.claudeOptions.sessionMode
+    }
+    if (options.startupActions?.length) {
+      toolData.startupActionsCount = options.startupActions.length
     }
 
     const session: Session = {

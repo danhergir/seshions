@@ -105,7 +105,7 @@ export function DialogProvider(props: ParentProps) {
   useKeyboard((evt) => {
     if (state.stack.length === 0) return
     if (evt.defaultPrevented) return
-    if (evt.name === "escape" || (evt.ctrl && evt.name === "c")) {
+    if (evt.name === "escape") {
       if (renderer.getSelection()) return
       const current = state.stack.at(-1)!
       current.onClose?.()

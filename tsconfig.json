@@ -1,10 +1,10 @@
 {
-  "extends": "@tsconfig/bun/tsconfig.json",
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "CommonJS",
+    "moduleResolution": "node",
     "lib": ["ES2022"],
+    "types": ["node"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -14,8 +14,6 @@
     "declarationMap": true,
     "outDir": "./dist",
     "rootDir": "./src",
-    "jsx": "preserve",
-    "jsxImportSource": "solid-js",
     "paths": {
       "@/*": ["./src/*"],
       "@core/*": ["./src/core/*"],
@@ -23,6 +21,13 @@
     },
     "baseUrl": "."
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/index.ts",
+    "src/cli/**/*.ts",
+    "src/core/**/*.ts",
+    "src/types/**/*.d.ts",
+    "src/ui/**/*.ts",
+    "src/tui/util/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist", "src/tui/**/*.tsx", "src/types/opentui.d.ts"]
 }
