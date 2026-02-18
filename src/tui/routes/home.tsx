@@ -15,6 +15,7 @@ import { DialogFork } from "@tui/component/dialog-fork"
 import { DialogRename } from "@tui/component/dialog-rename"
 import { DialogGroup } from "@tui/component/dialog-group"
 import { DialogMove } from "@tui/component/dialog-move"
+import { DialogProfileManager } from "@tui/component/dialog-profile"
 import { attachSessionSync, capturePane, wasCommandPaletteRequested } from "@/core/tmux"
 import { canFork } from "@/core/claude"
 import { useCommandDialog } from "@tui/component/dialog-command"
@@ -40,21 +41,13 @@ function log(...args: unknown[]) {
 }
 
 const LOGO = `
- █████╗  ██████╗ ███████╗███╗   ██╗████████╗
-██╔══██╗██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝
-███████║██║  ███╗█████╗  ██╔██╗ ██║   ██║
-██╔══██║██║   ██║██╔══╝  ██║╚██╗██║   ██║
-██║  ██║╚██████╔╝███████╗██║ ╚████║   ██║
-╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝
-██╗   ██╗██╗███████╗██╗    ██╗
-██║   ██║██║██╔════╝██║    ██║
-██║   ██║██║█████╗  ██║ █╗ ██║
-╚██╗ ██╔╝██║██╔══╝  ██║███╗██║
- ╚████╔╝ ██║███████╗╚███╔███╔╝
-  ╚═══╝  ╚═╝╚══════╝ ╚══╝╚══╝
+░██████╗███████╗░██████╗██╗░░██╗██╗░█████╗░███╗░░██╗░██████╗
+██╔════╝██╔════╝██╔════╝██║░░██║██║██╔══██╗████╗░██║██╔════╝
+╚█████╗░█████╗░░╚█████╗░███████║██║██║░░██║██╔██╗██║╚█████╗░
+░╚═══██╗██╔══╝░░░╚═══██╗██╔══██║██║██║░░██║██║╚████║░╚═══██╗
+██████╔╝███████╗██████╔╝██║░░██║██║╚█████╔╝██║░╚███║██████╔╝
+╚═════╝░╚══════╝╚═════╝░╚═╝░░╚═╝╚═╝░╚════╝░╚═╝░░╚══╝╚═════╝░
 `.trim()
-
-const SMALL_LOGO = `◆ AGENT VIEW`
 
 function stripAnsi(str: string): string {
   return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "")
@@ -191,6 +184,7 @@ export function Home() {
     return {
       running: byStatus.running.length,
       waiting: byStatus.waiting.length,
+      idle: byStatus.idle.length,
       total: sync.session.list().length
     }
   })
@@ -422,6 +416,11 @@ export function Home() {
       }
     }
 
+    // p to manage workspace profiles
+    if (evt.name === "p" && !evt.shift) {
+      dialog.push(() => <DialogProfileManager />)
+    }
+
     // f to fork (quick)
     if (evt.name === "f" && !evt.shift) {
       log("f pressed, selectedSession:", selectedSession()?.id, selectedSession()?.tool)
@@ -476,6 +475,8 @@ export function Home() {
         height={1}
         backgroundColor={isSelected() ? theme.primary : theme.backgroundElement}
       >
+        <text fg={isSelected() ? theme.selectedListItemText : theme.primary}>▌</text>
+        <text> </text>
         {/* Expand/collapse arrow */}
         <text fg={isSelected() ? theme.selectedListItemText : theme.accent}>
           {props.group.expanded ? "\u25BC" : "\u25B6"}
@@ -551,6 +552,8 @@ export function Home() {
         height={1}
         backgroundColor={isSelected() ? theme.primary : undefined}
       >
+        <text fg={isSelected() ? theme.selectedListItemText : statusColor()}>▌</text>
+        <text> </text>
         {/* Status icon */}
         <text fg={isSelected() ? theme.selectedListItemText : statusColor()}>
           {STATUS_ICONS[props.session.status]}
@@ -613,15 +616,16 @@ export function Home() {
 
         {/* Session info */}
         <box flexDirection="row" gap={2} height={1}>
-          <text fg={theme.textMuted}>{truncatePath(session.projectPath, rightWidth() - 20)}</text>
+          <text fg={theme.textMuted}>PATH</text>
+          <text fg={theme.text}>{truncatePath(session.projectPath, rightWidth() - 26)}</text>
         </box>
 
         {/* More info */}
         <box flexDirection="row" gap={2} height={1}>
-          <text fg={theme.accent}>{session.tool}</text>
-          <text fg={theme.textMuted}>{formatRelativeTime(session.lastAccessed)}</text>
+          <text fg={theme.accent}>TOOL:{session.tool}</text>
+          <text fg={theme.textMuted}>AGE:{formatRelativeTime(session.lastAccessed)}</text>
           <Show when={session.worktreeBranch}>
-            <text fg={theme.info}>{session.worktreeBranch}</text>
+            <text fg={theme.info}>BRANCH:{session.worktreeBranch}</text>
           </Show>
         </box>
 
@@ -639,11 +643,11 @@ export function Home() {
       <box flexGrow={1} alignItems="center" justifyContent="center" flexDirection="column" gap={2}>
         <text fg={theme.primary}>{LOGO}</text>
         <box height={1} />
-        <text fg={theme.textMuted}>No sessions yet</text>
+        <text fg={theme.textMuted}>No active tracks</text>
         <box flexDirection="row">
           <text fg={theme.textMuted}>Press </text>
           <text fg={theme.text} attributes={TextAttributes.BOLD}>n</text>
-          <text fg={theme.textMuted}> to create a new session</text>
+          <text fg={theme.textMuted}> to launch your first session</text>
         </box>
       </box>
     )
@@ -655,7 +659,7 @@ export function Home() {
       <box flexGrow={1} alignItems="center" justifyContent="center" flexDirection="column">
         <text fg={theme.primary}>{LOGO}</text>
         <box height={2} />
-        <text fg={theme.textMuted}>Select a session to see preview</text>
+        <text fg={theme.textMuted}>Select a session to inspect live output</text>
       </box>
     )
   }
@@ -677,16 +681,19 @@ export function Home() {
         backgroundColor={theme.backgroundPanel}
       >
         <text fg={theme.primary} attributes={TextAttributes.BOLD}>
-          AGENT VIEW
+          SESHIONS // INDUSTRIAL DECK
         </text>
         <box flexDirection="row" gap={2}>
           <Show when={stats().running > 0}>
-            <text fg={theme.success}>● {stats().running}</text>
+            <text fg={theme.success}>RUN {stats().running}</text>
           </Show>
           <Show when={stats().waiting > 0}>
-            <text fg={theme.warning}>◐ {stats().waiting}</text>
+            <text fg={theme.warning}>WAIT {stats().waiting}</text>
           </Show>
-          <text fg={theme.textMuted}>{stats().total} sessions</text>
+          <Show when={stats().idle > 0}>
+            <text fg={theme.textMuted}>IDLE {stats().idle}</text>
+          </Show>
+          <text fg={theme.textMuted}>TOTAL {stats().total}</text>
         </box>
       </box>
 
@@ -706,7 +713,7 @@ export function Home() {
               backgroundColor={theme.backgroundElement}
             >
               <text fg={theme.textMuted} attributes={TextAttributes.BOLD}>
-                SESSIONS
+                CONTROL ROSTER
               </text>
             </box>
 
@@ -750,12 +757,12 @@ export function Home() {
                 height={1}
                 paddingLeft={1}
                 paddingRight={1}
-                backgroundColor={theme.backgroundElement}
-              >
-                <text fg={theme.textMuted} attributes={TextAttributes.BOLD}>
-                  PREVIEW
-                </text>
-              </box>
+              backgroundColor={theme.backgroundElement}
+            >
+              <text fg={theme.textMuted} attributes={TextAttributes.BOLD}>
+                LIVE FEED
+              </text>
+            </box>
 
               {/* Preview content */}
               <Show
@@ -805,11 +812,11 @@ export function Home() {
       >
         <box flexDirection="column" alignItems="center">
           <text fg={theme.text}>↑↓</text>
-          <text fg={theme.textMuted}>navigate</text>
+          <text fg={theme.textMuted}>scan</text>
         </box>
         <box flexDirection="column" alignItems="center">
           <text fg={theme.text}>←→</text>
-          <text fg={theme.textMuted}>fold</text>
+          <text fg={theme.textMuted}>collapse</text>
         </box>
         <box flexDirection="column" alignItems="center">
           <text fg={theme.text}>Enter</text>
@@ -817,7 +824,7 @@ export function Home() {
         </box>
         <box flexDirection="column" alignItems="center">
           <text fg={theme.text}>n</text>
-          <text fg={theme.textMuted}>new</text>
+          <text fg={theme.textMuted}>launch</text>
         </box>
         <box flexDirection="column" alignItems="center">
           <text fg={theme.text}>g</text>
@@ -828,8 +835,12 @@ export function Home() {
           <text fg={theme.textMuted}>move</text>
         </box>
         <box flexDirection="column" alignItems="center">
+          <text fg={theme.text}>p</text>
+          <text fg={theme.textMuted}>profiles</text>
+        </box>
+        <box flexDirection="column" alignItems="center">
           <text fg={theme.text}>d</text>
-          <text fg={theme.textMuted}>delete</text>
+          <text fg={theme.textMuted}>drop</text>
         </box>
         <box flexDirection="column" alignItems="center">
           <text fg={theme.text}>R</text>
@@ -841,11 +852,11 @@ export function Home() {
         </box>
         <box flexDirection="column" alignItems="center">
           <text fg={theme.text}>1-9</text>
-          <text fg={theme.textMuted}>jump</text>
+          <text fg={theme.textMuted}>warp</text>
         </box>
         <box flexDirection="column" alignItems="center">
           <text fg={theme.text}>q</text>
-          <text fg={theme.textMuted}>quit</text>
+          <text fg={theme.textMuted}>detach</text>
         </box>
       </box>
     </box>

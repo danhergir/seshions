@@ -16,7 +16,7 @@ import { attachSessionSync } from "@/core/tmux"
 import { isGitRepo, getRepoRoot, createWorktree, generateBranchName, generateWorktreePath, sanitizeBranchName, branchExists } from "@/core/git"
 import { HistoryManager } from "@/core/history"
 import { getStorage } from "@/core/storage"
-import type { Tool, ClaudeSessionMode } from "@/core/types"
+import type { Tool, Profile, ClaudeSessionMode } from "@/core/types"
 import { getToolCommand } from "@/core/types"
 import { exec } from "child_process"
 import { promisify } from "util"
@@ -58,7 +58,7 @@ const TOOLS: { value: Tool; label: string; description: string }[] = [
   { value: "shell", label: "Shell", description: "Plain terminal session" }
 ]
 
-type FocusField = "title" | "tool" | "resumeSession" | "customCommand" | "path" | "worktree" | "branch"
+type FocusField = "profile" | "title" | "tool" | "resumeSession" | "customCommand" | "path" | "worktree" | "branch"
 
 export function DialogNew() {
   const dialog = useDialog()
@@ -68,6 +68,12 @@ export function DialogNew() {
   const { theme } = useTheme()
   const renderer = useRenderer()
   const { config } = useConfig()
+
+  const profiles = () => sync.profile.list()
+  const profileOptions = () => [undefined as string | undefined, ...profiles().map((profile) => profile.id)]
+  const [selectedProfileId, setSelectedProfileId] = createSignal<string | undefined>(undefined)
+  const selectedProfile = () =>
+    selectedProfileId() ? profiles().find((profile) => profile.id === selectedProfileId()) : undefined
 
   // Get default tool from config, find its index
   const defaultTool = config().defaultTool || "claude"
@@ -118,6 +124,36 @@ export function DialogNew() {
   let customCommandInputRef: InputRenderable | undefined
   let pathInputRef: InputRenderable | undefined
   let branchInputRef: InputRenderable | undefined
+
+  function cycleProfile(direction: 1 | -1) {
+    const options = profileOptions()
+    if (options.length === 0) return
+    const current = selectedProfileId()
+    const currentIndex = options.findIndex((id) => id === current)
+    const startIndex = currentIndex === -1 ? 0 : currentIndex
+    const nextIndex = (startIndex + direction + options.length) % options.length
+    const next = options[nextIndex]
+    setSelectedProfileId(next)
+  }
+
+  function applyProfile(profile: Profile | undefined) {
+    if (!profile) return
+
+    setProjectPath(profile.projectPath)
+    setSelectedTool(profile.defaultTool)
+    setCustomCommand(profile.defaultCustomCommand)
+    setUseWorktree(profile.useWorktree)
+    setUseBaseDevelop(profile.defaultBaseBranch === "develop")
+
+    const profileToolIndex = TOOLS.findIndex((tool) => tool.value === profile.defaultTool)
+    if (profileToolIndex >= 0) {
+      setToolIndex(profileToolIndex)
+    }
+  }
+
+  createEffect(() => {
+    applyProfile(selectedProfile())
+  })
 
   // Reset Claude session mode when tool changes
   createEffect(() => {
@@ -189,7 +225,7 @@ export function DialogNew() {
 
   // Get the list of focusable fields based on current state
   function getFocusableFields(): FocusField[] {
-    const fields: FocusField[] = ["title", "tool"]
+    const fields: FocusField[] = ["profile", "title", "tool"]
     // Add resume checkbox when Claude is selected
     if (selectedTool() === "claude") {
       fields.push("resumeSession")
@@ -254,10 +290,16 @@ export function DialogNew() {
         const worktreeConfig = config().worktree || {}
 
         // Determine base branch for worktree
-        // Priority: 1) "Base on develop" checkbox, 2) config default, 3) undefined (HEAD)
+        // Priority:
+        // 1) "Base on develop" checkbox
+        // 2) profile default base branch
+        // 3) config default base branch
+        // 4) undefined (HEAD)
         let baseBranch: string | undefined
         if (useBaseDevelop()) {
           baseBranch = "develop"
+        } else if (selectedProfile()?.defaultBaseBranch && selectedProfile()?.defaultBaseBranch !== "main") {
+          baseBranch = selectedProfile()?.defaultBaseBranch
         } else if (worktreeConfig.defaultBaseBranch && worktreeConfig.defaultBaseBranch !== "main") {
           // Only use config base branch if it's not "main" (which is essentially HEAD)
           baseBranch = worktreeConfig.defaultBaseBranch
@@ -354,6 +396,20 @@ export function DialogNew() {
       return
     }
 
+    // Left/right navigation for profile selection
+    if (focusedField() === "profile") {
+      if (evt.name === "left" || evt.name === "h" || evt.name === "up" || evt.name === "k") {
+        evt.preventDefault()
+        cycleProfile(-1)
+        return
+      }
+      if (evt.name === "right" || evt.name === "l" || evt.name === "down" || evt.name === "j") {
+        evt.preventDefault()
+        cycleProfile(1)
+        return
+      }
+    }
+
     // Arrow key navigation for tool selection
     if (focusedField() === "tool") {
       if (evt.name === "up" || evt.name === "k") {
@@ -406,6 +462,33 @@ export function DialogNew() {
           <text fg={theme.textMuted}>
             esc
           </text>
+        </box>
+      </box>
+
+      {/* Profile selector */}
+      <box paddingLeft={4} paddingRight={4} gap={1}>
+        <text fg={focusedField() === "profile" ? theme.primary : theme.textMuted}>
+          Workspace Profile
+        </text>
+        <box
+          flexDirection="row"
+          paddingLeft={1}
+          paddingRight={1}
+          backgroundColor={focusedField() === "profile" ? theme.backgroundElement : undefined}
+        >
+          <text fg={theme.textMuted}>◀</text>
+          <text> </text>
+          <text
+            fg={focusedField() === "profile" ? theme.text : theme.textMuted}
+            attributes={focusedField() === "profile" ? TextAttributes.BOLD : undefined}
+          >
+            {selectedProfile()?.name ?? "No profile"}
+          </text>
+          <Show when={selectedProfile()}>
+            <text fg={theme.textMuted}> ({selectedProfile()?.defaultTool})</text>
+          </Show>
+          <text flexGrow={1}> </text>
+          <text fg={theme.textMuted}>▶</text>
         </box>
       </box>
 
@@ -608,7 +691,7 @@ export function DialogNew() {
       {/* Footer with keybind hints */}
       <box paddingLeft={4} paddingRight={4} paddingTop={1}>
         <text fg={theme.textMuted}>
-          {creating() ? statusMessage() : "Tab | Enter: create"}
+          {creating() ? statusMessage() : "Tab: next | ←→: profile | Enter: create"}
         </text>
       </box>
     </box>

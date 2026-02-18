@@ -6,10 +6,11 @@
 import { Database } from "bun:sqlite"
 import path from "path"
 import fs from "fs"
-import type { Session, Group, StatusUpdate, Tool, SessionStatus } from "./types"
+import { randomUUID } from "crypto"
+import type { Session, Group, Profile, StatusUpdate, Tool, SessionStatus } from "./types"
 import { getStateDbPath } from "./app-paths"
 
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 
 export interface StorageOptions {
   dbPath?: string
@@ -80,6 +81,20 @@ export class Storage {
         expanded INTEGER NOT NULL DEFAULT 1,
         sort_order INTEGER NOT NULL DEFAULT 0,
         default_path TEXT NOT NULL DEFAULT ''
+      )
+    `)
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS profiles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        project_path TEXT NOT NULL,
+        default_tool TEXT NOT NULL DEFAULT 'claude',
+        default_custom_command TEXT NOT NULL DEFAULT '',
+        use_worktree INTEGER NOT NULL DEFAULT 0,
+        default_base_branch TEXT NOT NULL DEFAULT 'main',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
       )
     `)
 
@@ -364,6 +379,145 @@ export class Storage {
   deleteGroup(path: string): void {
     const stmt = this.db.prepare("DELETE FROM groups WHERE path = ?")
     stmt.run(path)
+  }
+
+  // Profile CRUD
+
+  private profileFromRow(row: any): Profile {
+    return {
+      id: row.id,
+      name: row.name,
+      projectPath: row.project_path,
+      defaultTool: row.default_tool as Tool,
+      defaultCustomCommand: row.default_custom_command,
+      useWorktree: row.use_worktree === 1,
+      defaultBaseBranch: row.default_base_branch,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at)
+    }
+  }
+
+  listProfiles(): Profile[] {
+    if (this.closed) return []
+    const stmt = this.db.prepare(`
+      SELECT
+        id,
+        name,
+        project_path,
+        default_tool,
+        default_custom_command,
+        use_worktree,
+        default_base_branch,
+        created_at,
+        updated_at
+      FROM profiles
+      ORDER BY updated_at DESC, name ASC
+    `)
+
+    const rows = stmt.all() as any[]
+    return rows.map((row) => this.profileFromRow(row))
+  }
+
+  getProfile(id: string): Profile | null {
+    if (this.closed) return null
+    const stmt = this.db.prepare(`
+      SELECT
+        id,
+        name,
+        project_path,
+        default_tool,
+        default_custom_command,
+        use_worktree,
+        default_base_branch,
+        created_at,
+        updated_at
+      FROM profiles
+      WHERE id = ?
+    `)
+    const row = stmt.get(id) as any
+    return row ? this.profileFromRow(row) : null
+  }
+
+  createProfile(input: Omit<Profile, "id" | "createdAt" | "updatedAt">): Profile {
+    const now = Date.now()
+    const id = randomUUID()
+    const stmt = this.db.prepare(`
+      INSERT INTO profiles (
+        id,
+        name,
+        project_path,
+        default_tool,
+        default_custom_command,
+        use_worktree,
+        default_base_branch,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+
+    stmt.run(
+      id,
+      input.name,
+      input.projectPath,
+      input.defaultTool,
+      input.defaultCustomCommand,
+      input.useWorktree ? 1 : 0,
+      input.defaultBaseBranch,
+      now,
+      now
+    )
+
+    return {
+      ...input,
+      id,
+      createdAt: new Date(now),
+      updatedAt: new Date(now)
+    }
+  }
+
+  updateProfile(
+    id: string,
+    updates: Partial<Omit<Profile, "id" | "createdAt" | "updatedAt">>
+  ): Profile | null {
+    const current = this.getProfile(id)
+    if (!current) return null
+
+    const next: Profile = {
+      ...current,
+      ...updates,
+      updatedAt: new Date()
+    }
+
+    const stmt = this.db.prepare(`
+      UPDATE profiles
+      SET
+        name = ?,
+        project_path = ?,
+        default_tool = ?,
+        default_custom_command = ?,
+        use_worktree = ?,
+        default_base_branch = ?,
+        updated_at = ?
+      WHERE id = ?
+    `)
+
+    stmt.run(
+      next.name,
+      next.projectPath,
+      next.defaultTool,
+      next.defaultCustomCommand,
+      next.useWorktree ? 1 : 0,
+      next.defaultBaseBranch,
+      next.updatedAt.getTime(),
+      id
+    )
+
+    return next
+  }
+
+  deleteProfile(id: string): void {
+    const stmt = this.db.prepare("DELETE FROM profiles WHERE id = ?")
+    stmt.run(id)
   }
 
   // Heartbeat management

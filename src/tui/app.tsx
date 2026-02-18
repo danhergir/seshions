@@ -30,6 +30,7 @@ import { ToastProvider, useToast } from "@tui/ui/toast"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
 import { DialogSessions } from "@tui/component/dialog-sessions"
 import { DialogNew } from "@tui/component/dialog-new"
+import { DialogProfileManager } from "@tui/component/dialog-profile"
 import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
 import { getStorage, setStorage, Storage } from "@/core/storage"
@@ -162,6 +163,15 @@ function App(props: { onExit: () => Promise<void> }) {
         }
       },
       {
+        title: "Workspace profiles",
+        value: "session.profiles",
+        category: "Session",
+        keybind: "P",
+        onSelect: () => {
+          dialog.replace(() => <DialogProfileManager />)
+        }
+      },
+      {
         title: "Go home",
         value: "nav.home",
         category: "Navigation",
@@ -187,10 +197,6 @@ function App(props: { onExit: () => Promise<void> }) {
 
     if (dialog.stack.length > 0) return
 
-    if (evt.ctrl && evt.name === "c") {
-      props.onExit()
-    }
-
     if (evt.ctrl && evt.name === "k") {
       command.open()
     }
@@ -206,6 +212,10 @@ function App(props: { onExit: () => Promise<void> }) {
       dialog.replace(() => <DialogSessions />)
     }
 
+    if (evt.name === "p") {
+      dialog.replace(() => <DialogProfileManager />)
+    }
+
     if (evt.name === "q") {
       props.onExit()
     }
@@ -213,7 +223,7 @@ function App(props: { onExit: () => Promise<void> }) {
     if (evt.name === "?") {
       toast.show({
         title: "Help",
-        message: "Ctrl+K: Commands | L: Sessions | N: New | Q: Quit",
+        message: "Ctrl+K: Action Hub | L: Sessions | N: New | P: Profiles | Q: Quit",
         variant: "info",
         duration: 5000
       })

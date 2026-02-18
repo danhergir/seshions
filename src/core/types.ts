@@ -46,6 +46,18 @@ export interface Group {
   defaultPath: string
 }
 
+export interface Profile {
+  id: string
+  name: string
+  projectPath: string
+  defaultTool: Tool
+  defaultCustomCommand: string
+  useWorktree: boolean
+  defaultBaseBranch: string
+  createdAt: Date
+  updatedAt: Date
+}
+
 export interface StatusUpdate {
   sessionId: string
   status: SessionStatus

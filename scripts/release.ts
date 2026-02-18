@@ -89,7 +89,7 @@ async function main() {
 ### Installation
 
 \`\`\`bash
-SESHIONS_REPO=${REPO} curl -fsSL "https://raw.githubusercontent.com/\${SESHIONS_REPO}/main/install.sh" | bash
+npx seshions@latest
 \`\`\`
 
 ### Direct Download

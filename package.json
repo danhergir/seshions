@@ -3,15 +3,27 @@
   "version": "0.2.0",
   "description": "OpenTUI-based Agent Management",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "launcher/seshions.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "launcher",
+    "scripts/runtime",
+    "README.md",
+    "LICENSE",
+    "install.sh",
+    "uninstall.sh"
+  ],
   "bin": {
-    "seshions": "./dist/cli/index.js"
+    "seshions": "./launcher/seshions.js"
   },
   "scripts": {
     "build": "bun run scripts/build.ts",
     "compile": "bun run scripts/compile.ts",
     "compile:all": "bun run scripts/compile.ts --all",
     "release": "bun run scripts/release.ts",
+    "postinstall": "node scripts/runtime/postinstall.mjs",
     "dev": "bun run scripts/build.ts && bun run dist/index.js",
     "start": "bun run dist/index.js",
     "test": "bun test",

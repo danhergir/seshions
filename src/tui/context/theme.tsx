@@ -32,6 +32,46 @@ export type Theme = ThemeColors
 
 // Default themes
 const themes: Record<string, Record<"dark" | "light", ThemeColors>> = {
+  industrial: {
+    dark: {
+      primary: RGBA.fromHex("#f59e0b"),
+      secondary: RGBA.fromHex("#22d3ee"),
+      accent: RGBA.fromHex("#f97316"),
+      error: RGBA.fromHex("#ef4444"),
+      warning: RGBA.fromHex("#f59e0b"),
+      success: RGBA.fromHex("#34d399"),
+      info: RGBA.fromHex("#38bdf8"),
+      text: RGBA.fromHex("#f8fafc"),
+      textMuted: RGBA.fromHex("#94a3b8"),
+      selectedListItemText: RGBA.fromHex("#111827"),
+      background: RGBA.fromHex("#0f172a"),
+      backgroundPanel: RGBA.fromHex("#111827"),
+      backgroundElement: RGBA.fromHex("#1f2937"),
+      backgroundMenu: RGBA.fromHex("#0b1220"),
+      border: RGBA.fromHex("#334155"),
+      borderActive: RGBA.fromHex("#f59e0b"),
+      borderSubtle: RGBA.fromHex("#1e293b")
+    },
+    light: {
+      primary: RGBA.fromHex("#d97706"),
+      secondary: RGBA.fromHex("#0284c7"),
+      accent: RGBA.fromHex("#c2410c"),
+      error: RGBA.fromHex("#dc2626"),
+      warning: RGBA.fromHex("#d97706"),
+      success: RGBA.fromHex("#059669"),
+      info: RGBA.fromHex("#0369a1"),
+      text: RGBA.fromHex("#1f2937"),
+      textMuted: RGBA.fromHex("#64748b"),
+      selectedListItemText: RGBA.fromHex("#f8fafc"),
+      background: RGBA.fromHex("#f8fafc"),
+      backgroundPanel: RGBA.fromHex("#f1f5f9"),
+      backgroundElement: RGBA.fromHex("#e2e8f0"),
+      backgroundMenu: RGBA.fromHex("#e2e8f0"),
+      border: RGBA.fromHex("#cbd5e1"),
+      borderActive: RGBA.fromHex("#d97706"),
+      borderSubtle: RGBA.fromHex("#e2e8f0")
+    }
+  },
   opencode: {
     dark: {
       primary: RGBA.fromHex("#fab283"),
@@ -168,10 +208,10 @@ export const { use: useTheme, provider: ThemeProvider } = createSimpleContext({
   name: "Theme",
   init: (props: { mode?: "dark" | "light" }) => {
     const [mode, setMode] = createSignal<"dark" | "light">(props.mode ?? "dark")
-    const [selected, setSelected] = createSignal("opencode")
+    const [selected, setSelected] = createSignal("industrial")
 
     const theme = createMemo<Theme>(() => {
-      const themeDef = themes[selected()] ?? themes.opencode!
+      const themeDef = themes[selected()] ?? themes.industrial!
       return themeDef![mode()]
     })
 

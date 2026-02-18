@@ -12,9 +12,26 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 
 ## Requirements
 
-- Bun
+- Node.js 18+
 - tmux
 - At least one coding tool installed (`claude`, `codex`, `gemini`, `opencode`, or custom shell command)
+
+## Install (One Command)
+
+Run immediately (no global install):
+
+```bash
+npx seshions@latest
+```
+
+Install globally:
+
+```bash
+npm install -g seshions
+seshions
+```
+
+The npm launcher downloads the matching native runtime automatically and caches it in `~/.seshions/runtime`.
 
 ## Local Development
 
@@ -39,7 +56,7 @@ bun run compile
 
 ## Install Script
 
-Set your repo first, then run installer:
+Alternative manual installer:
 
 ```bash
 export SESHIONS_REPO="danhergir/seshions"
@@ -48,12 +65,26 @@ curl -fsSL "https://raw.githubusercontent.com/${SESHIONS_REPO}/main/install.sh" 
 
 ## Uninstall
 
+If installed with npm:
+
+```bash
+npm uninstall -g seshions
+```
+
+Remove cached runtime + state data:
+
+```bash
+rm -rf ~/.seshions
+```
+
+If installed with the manual installer:
+
 ```bash
 export SESHIONS_REPO="danhergir/seshions"
 curl -fsSL "https://raw.githubusercontent.com/${SESHIONS_REPO}/main/uninstall.sh" | bash
 ```
 
-Optional full cleanup:
+Optional full cleanup (manual installer):
 
 ```bash
 curl -fsSL "https://raw.githubusercontent.com/${SESHIONS_REPO}/main/uninstall.sh" | bash -s -- --purge-data

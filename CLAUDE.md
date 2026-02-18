@@ -42,16 +42,22 @@ src/
 ### Quick Install (Recommended)
 
 ```bash
-export SESHIONS_REPO="danhergir/seshions"
-curl -fsSL "https://raw.githubusercontent.com/${SESHIONS_REPO}/main/install.sh" | bash
+npx seshions@latest
 ```
 
 This will:
-- Download the latest release binary for your platform
-- Install commands into `~/.seshions/bin`
-- Create the `seshions` command
+- Download the latest runtime for your platform
+- Cache it in `~/.seshions/runtime`
+- Start `seshions` directly
 
-### Manual Install
+### Global Install
+
+```bash
+npm install -g seshions
+seshions
+```
+
+### Source Install
 
 ```bash
 git clone https://github.com/danhergir/seshions.git
@@ -72,14 +78,13 @@ Binaries are output to the `bin/` directory.
 ### Uninstall
 
 ```bash
-export SESHIONS_REPO="danhergir/seshions"
-curl -fsSL "https://raw.githubusercontent.com/${SESHIONS_REPO}/main/uninstall.sh" | bash
+npm uninstall -g seshions
 ```
 
-To remove state/config/log data too:
+To remove runtime/state/config/log data too:
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/${SESHIONS_REPO}/main/uninstall.sh" | bash -s -- --purge-data
+rm -rf ~/.seshions
 ```
 
 ## Compatibility Notes

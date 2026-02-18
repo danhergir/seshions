@@ -7,7 +7,7 @@ import { createSignal, createEffect, onCleanup, batch } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { getStorage } from "@/core/storage"
 import { getSessionManager } from "@/core/session"
-import type { Session, Group, Config } from "@/core/types"
+import type { Session, Group, Profile, Config } from "@/core/types"
 import { createSimpleContext } from "./helper"
 
 export type SyncStatus = "loading" | "partial" | "complete"
@@ -19,10 +19,12 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     const [store, setStore] = createStore<{
       sessions: Session[]
       groups: Group[]
+      profiles: Profile[]
       config: Config
     }>({
       sessions: [],
       groups: [],
+      profiles: [],
       config: {}
     })
 
@@ -34,10 +36,12 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
     function refresh() {
       const sessions = storage.loadSessions()
       const groups = storage.loadGroups()
+      const profiles = storage.listProfiles()
 
       batch(() => {
         setStore("sessions", sessions)
         setStore("groups", groups)
+        setStore("profiles", profiles)
         if (status() === "loading") {
           setStatus("partial")
         }
@@ -175,6 +179,33 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
             g.path === path ? { ...g, name: newName } : g
           )
           storage.saveGroups(groups)
+          refresh()
+        }
+      },
+      profile: {
+        get(id: string): Profile | undefined {
+          return store.profiles.find((p) => p.id === id)
+        },
+        list(): Profile[] {
+          return store.profiles
+        },
+        create(input: Omit<Profile, "id" | "createdAt" | "updatedAt">): Profile {
+          const profile = storage.createProfile(input)
+          storage.touch()
+          refresh()
+          return profile
+        },
+        update(id: string, updates: Partial<Omit<Profile, "id" | "createdAt" | "updatedAt">>): Profile | null {
+          const profile = storage.updateProfile(id, updates)
+          if (profile) {
+            storage.touch()
+            refresh()
+          }
+          return profile
+        },
+        delete(id: string): void {
+          storage.deleteProfile(id)
+          storage.touch()
           refresh()
         }
       },

@@ -24,8 +24,9 @@ Options:
 
 Keyboard Shortcuts (in TUI):
   Ctrl+K         Action Hub
-  Ctrl+L         Session list
+  L              Session list
   N              Launch session
+  P              Workspace profiles
   Q              Close / Detach
   ?              Help
 `)
