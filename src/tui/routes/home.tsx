@@ -233,12 +233,14 @@ export function Home() {
       return
     }
 
+    sync.session.markAccessed(session.id)
     previewFetchAbort = true
     renderer.suspend()
     try {
       attachSessionSync(session.tmuxSession)
     } catch (err) {
       console.error("Attach error:", err)
+      toast.show({ message: "Could not attach to session", variant: "error", duration: 2000 })
     }
     renderer.resume()
     sync.refresh()

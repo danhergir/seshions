@@ -131,6 +131,10 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         moveToGroup(id: string, groupPath: string): void {
           manager.moveToGroup(id, groupPath)
           refresh()
+        },
+        markAccessed(id: string): void {
+          manager.markAccessed(id)
+          refresh()
         }
       },
       group: {

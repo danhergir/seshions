@@ -9,6 +9,7 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 - Group sessions by workflow
 - Optional git worktree isolation per session
 - Persist session state across restarts via tmux
+- Auto-import external tmux sessions (best-effort detection for Codex, Claude, and Gemini)
 
 ## Keyboard UX
 
@@ -44,6 +45,28 @@ seshions
 ```
 
 The npm launcher downloads the matching native runtime automatically and caches it in `~/.seshions/runtime`.
+
+## Auto-Wrap External Tool Launches
+
+Enable one-time wrappers so running `codex`, `claude`, or `gemini` from your shell automatically creates a managed tmux session in Seshions:
+
+```bash
+seshions enable
+```
+
+Check status:
+
+```bash
+seshions status
+```
+
+Disable wrappers:
+
+```bash
+seshions disable
+```
+
+Wrappers are installed in `~/.local/bin` and call `seshions __wrap ...` internally.
 
 ## Local Development
 
