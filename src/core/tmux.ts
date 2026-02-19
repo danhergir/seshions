@@ -359,7 +359,7 @@ export function parseToolStatus(output: string): ToolStatus {
 
 /**
  * Attach to a tmux session with PTY support
- * Intercepts Ctrl+Q (ASCII 17) to detach and return control to the TUI
+ * Intercepts Ctrl+C (ASCII 3) to detach and return control to the TUI
  */
 export async function attachWithPty(sessionName: string): Promise<void> {
   const ptyModule = await getPty()
@@ -394,16 +394,16 @@ export async function attachWithPty(sessionName: string): Promise<void> {
     }
     process.stdout.on("resize", handleResize)
 
-    // Put stdin in raw mode to capture Ctrl+Q
+    // Put stdin in raw mode to capture Ctrl+C
     const wasRaw = process.stdin.isRaw
     if (process.stdin.isTTY) {
       process.stdin.setRawMode(true)
     }
     process.stdin.resume()
 
-    // Intercept Ctrl+Q (ASCII 17) for detach
+    // Intercept Ctrl+C (ASCII 3) for detach
     const handleStdin = (data: Buffer) => {
-      if (data.length === 1 && data[0] === 17) {
+      if (data.length === 1 && data[0] === 3) {
         isDetaching = true
         cleanup()
         resolve()
@@ -453,8 +453,8 @@ export function wasCommandPaletteRequested(): boolean {
 }
 
 /**
- * Attach to a tmux session with Ctrl+Q to detach
- * Configures tmux to use Ctrl+Q as detach key, then uses spawnSync
+ * Attach to a tmux session with Ctrl+C to detach
+ * Configures tmux to use Ctrl+C as detach key, then uses spawnSync
  */
 export function attachSessionSync(sessionName: string): void {
   const { spawnSync } = require("child_process")
@@ -467,8 +467,8 @@ export function attachSessionSync(sessionName: string): void {
     // Ignore if doesn't exist
   }
 
-  // Bind Ctrl+Q to detach in this session (C-q = ASCII 17)
-  spawnSync("tmux", ["bind-key", "-n", "C-q", "detach-client"], { stdio: "ignore" })
+  // Bind Ctrl+C to detach in this session (C-c = ASCII 3)
+  spawnSync("tmux", ["bind-key", "-n", "C-c", "detach-client"], { stdio: "ignore" })
 
   // Bind Ctrl+K to create signal file and detach (opens command palette on return)
   spawnSync("tmux", ["bind-key", "-n", "C-k", "run-shell", `touch ${COMMAND_PALETTE_SIGNAL}`, "\\;", "detach-client"], { stdio: "ignore" })
@@ -479,7 +479,7 @@ export function attachSessionSync(sessionName: string): void {
   spawnSync("tmux", ["set-option", "-t", sessionName, "status-style", "bg=#1e1e2e,fg=#cdd6f4"], { stdio: "ignore" })
   spawnSync("tmux", ["set-option", "-t", sessionName, "status-left", ""], { stdio: "ignore" })
   spawnSync("tmux", ["set-option", "-t", sessionName, "status-right-length", "120"], { stdio: "ignore" })
-  spawnSync("tmux", ["set-option", "-t", sessionName, "status-right", "#[fg=#89b4fa]Ctrl+K#[fg=#6c7086] action hub  #[fg=#89b4fa]Ctrl+Q#[fg=#6c7086] detach"], { stdio: "ignore" })
+  spawnSync("tmux", ["set-option", "-t", sessionName, "status-right", "#[fg=#89b4fa]Ctrl+K#[fg=#6c7086] action hub  #[fg=#89b4fa]Ctrl+C#[fg=#6c7086] detach"], { stdio: "ignore" })
 
   // Exit alternate screen buffer (TUI uses this)
   process.stdout.write("\x1b[?1049l")
@@ -488,14 +488,14 @@ export function attachSessionSync(sessionName: string): void {
   // Show cursor
   process.stdout.write("\x1b[?25h")
 
-  // Attach to tmux - this blocks until user detaches (Ctrl+Q or Ctrl+B d)
+  // Attach to tmux - this blocks until user detaches (Ctrl+C or Ctrl+B d)
   spawnSync("tmux", ["attach-session", "-t", sessionName], {
     stdio: "inherit",
     env: process.env
   })
 
   // Unbind session-specific keys (restore default behavior)
-  spawnSync("tmux", ["unbind-key", "-n", "C-q"], { stdio: "ignore" })
+  spawnSync("tmux", ["unbind-key", "-n", "C-c"], { stdio: "ignore" })
   spawnSync("tmux", ["unbind-key", "-n", "C-k"], { stdio: "ignore" })
 
   // Clear screen and re-enter alternate buffer for TUI

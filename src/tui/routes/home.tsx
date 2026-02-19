@@ -11,13 +11,11 @@ import { useSync } from "@tui/context/sync"
 import { useDialog } from "@tui/ui/dialog"
 import { useToast } from "@tui/ui/toast"
 import { DialogNew } from "@tui/component/dialog-new"
-import { DialogFork } from "@tui/component/dialog-fork"
 import { DialogRename } from "@tui/component/dialog-rename"
 import { DialogGroup } from "@tui/component/dialog-group"
 import { DialogMove } from "@tui/component/dialog-move"
 import { DialogProfileManager } from "@tui/component/dialog-profile"
 import { attachSessionSync, capturePane, wasCommandPaletteRequested } from "@/core/tmux"
-import { canFork } from "@/core/claude"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import type { Session, Group } from "@/core/types"
 import { formatRelativeTime, formatSmartTime, truncatePath } from "@tui/util/locale"
@@ -198,15 +196,6 @@ export function Home() {
     setSelectedIndex(next)
   }
 
-  // Jump to group by index (1-9)
-  function jumpToGroup(groupIndex: number) {
-    const items = groupedItems()
-    const idx = items.findIndex(item => item.type === "group" && item.groupIndex === groupIndex)
-    if (idx >= 0) {
-      setSelectedIndex(idx)
-    }
-  }
-
   // Handle deleting a group
   async function handleDeleteGroup(group: Group) {
     const sessionCount = getGroupSessionCount(allSessions(), group.path)
@@ -261,53 +250,6 @@ export function Home() {
     }
   }
 
-  async function handleRestart(session: Session) {
-    try {
-      await sync.session.restart(session.id)
-      toast.show({ message: "Session restarted", variant: "success", duration: 2000 })
-      sync.refresh()
-    } catch (err) {
-      toast.error(err as Error)
-    }
-  }
-
-  async function handleFork(session: Session) {
-    log("handleFork called for session:", session.id, "tool:", session.tool, "projectPath:", session.projectPath)
-
-    // Only Claude sessions can be forked
-    if (session.tool !== "claude") {
-      log("Fork rejected: not a claude session")
-      toast.show({ message: "Only Claude sessions can be forked", variant: "error", duration: 2000 })
-      return
-    }
-
-    // Check if session has an active Claude session ID
-    log("Checking canFork for projectPath:", session.projectPath)
-    const canForkSession = await canFork(session.projectPath)
-    log("canFork result:", canForkSession)
-
-    if (!canForkSession) {
-      log("Fork rejected: no active Claude session")
-      toast.show({
-        message: "Cannot fork: no active Claude session detected (session must be running)",
-        variant: "error",
-        duration: 3000
-      })
-      return
-    }
-
-    try {
-      log("Calling sync.session.fork")
-      const forked = await sync.session.fork({ sourceSessionId: session.id })
-      log("Fork successful:", forked.id)
-      toast.show({ message: `Forked as ${forked.title}`, variant: "success", duration: 2000 })
-      sync.refresh()
-    } catch (err) {
-      log("Fork error:", err)
-      toast.error(err as Error)
-    }
-  }
-
   // Keyboard navigation
   useKeyboard((evt) => {
     log("Home useKeyboard:", evt.name, "dialog.stack.length:", dialog.stack.length)
@@ -334,44 +276,11 @@ export function Home() {
       setSelectedIndex(Math.max(0, groupedItems().length - 1))
     }
 
-    // Number keys 1-9 to jump to groups
-    if (/^[1-9]$/.test(evt.name)) {
-      jumpToGroup(parseInt(evt.name, 10))
-    }
-
-    // Right arrow: expand group (or attach to session)
-    if (evt.name === "right" || evt.name === "l") {
-      const item = selectedItem()
-      if (item?.type === "group" && item.group && !item.group.expanded) {
-        sync.group.toggle(item.group.path)
-      } else if (item?.type === "session" && item.session) {
-        handleAttach(item.session)
-      }
-    }
-
-    // Left arrow: collapse group
-    if (evt.name === "left" || evt.name === "h") {
-      const item = selectedItem()
-      if (item?.type === "group" && item.group && item.group.expanded) {
-        sync.group.toggle(item.group.path)
-      } else if (item?.type === "session") {
-        // When on a session, collapse its parent group
-        const groupItem = groupedItems().find(
-          i => i.type === "group" && i.groupPath === item.groupPath
-        )
-        if (groupItem?.group?.expanded) {
-          sync.group.toggle(groupItem.group.path)
-        }
-      }
-    }
-
-    // Enter: attach to session OR toggle group expand/collapse
+    // Enter: attach to session
     if (evt.name === "return") {
       const item = selectedItem()
       if (item?.type === "session" && item.session) {
         handleAttach(item.session)
-      } else if (item?.type === "group" && item.group) {
-        sync.group.toggle(item.group.path)
       }
     }
 
@@ -385,16 +294,8 @@ export function Home() {
       }
     }
 
-    // r to restart (lowercase only, sessions only)
-    if (evt.name === "r" && !evt.shift) {
-      const session = selectedSession()
-      if (session) {
-        handleRestart(session)
-      }
-    }
-
-    // R (Shift+r) to rename session OR group
-    if (evt.name === "r" && evt.shift) {
+    // r to rename session OR group
+    if (evt.name === "r") {
       const item = selectedItem()
       if (item?.type === "session" && item.session) {
         dialog.push(() => <DialogRename session={item.session!} />)
@@ -421,27 +322,6 @@ export function Home() {
       dialog.push(() => <DialogProfileManager />)
     }
 
-    // f to fork (quick)
-    if (evt.name === "f" && !evt.shift) {
-      log("f pressed, selectedSession:", selectedSession()?.id, selectedSession()?.tool)
-      const session = selectedSession()
-      if (session) {
-        log("Calling handleFork for session:", session.id)
-        handleFork(session)
-      }
-    }
-
-    // F (Shift+f) to fork with options dialog
-    if (evt.name === "f" && evt.shift) {
-      const session = selectedSession()
-      if (session) {
-        if (session.tool !== "claude") {
-          toast.show({ message: "Only Claude sessions can be forked", variant: "error", duration: 2000 })
-          return
-        }
-        dialog.push(() => <DialogFork session={session} />)
-      }
-    }
   })
 
   // Get preview lines that fit in the available height
@@ -463,10 +343,6 @@ export function Home() {
     const sessionCount = createMemo(() => getGroupSessionCount(allSessions(), props.group.path))
     const statusSummary = createMemo(() => getGroupStatusSummary(allSessions(), props.group.path))
 
-    // Find group index for hotkey hint
-    const item = createMemo(() => groupedItems()[props.index])
-    const groupIndex = createMemo(() => item()?.groupIndex)
-
     return (
       <box
         flexDirection="row"
@@ -477,10 +353,7 @@ export function Home() {
       >
         <text fg={isSelected() ? theme.selectedListItemText : theme.primary}>▌</text>
         <text> </text>
-        {/* Expand/collapse arrow */}
-        <text fg={isSelected() ? theme.selectedListItemText : theme.accent}>
-          {props.group.expanded ? "\u25BC" : "\u25B6"}
-        </text>
+        <text fg={isSelected() ? theme.selectedListItemText : theme.accent}>◆</text>
         <text> </text>
 
         {/* Group name */}
@@ -513,13 +386,6 @@ export function Home() {
           ({sessionCount()})
         </text>
 
-        {/* Hotkey hint */}
-        <Show when={groupIndex()}>
-          <text> </text>
-          <text fg={isSelected() ? theme.selectedListItemText : theme.textMuted}>
-            [{groupIndex()}]
-          </text>
-        </Show>
       </box>
     )
   }
@@ -815,10 +681,6 @@ export function Home() {
           <text fg={theme.textMuted}>scan</text>
         </box>
         <box flexDirection="column" alignItems="center">
-          <text fg={theme.text}>←→</text>
-          <text fg={theme.textMuted}>collapse</text>
-        </box>
-        <box flexDirection="column" alignItems="center">
           <text fg={theme.text}>Enter</text>
           <text fg={theme.textMuted}>attach</text>
         </box>
@@ -843,16 +705,8 @@ export function Home() {
           <text fg={theme.textMuted}>drop</text>
         </box>
         <box flexDirection="column" alignItems="center">
-          <text fg={theme.text}>R</text>
+          <text fg={theme.text}>r</text>
           <text fg={theme.textMuted}>rename</text>
-        </box>
-        <box flexDirection="column" alignItems="center">
-          <text fg={theme.text}>f</text>
-          <text fg={theme.textMuted}>fork</text>
-        </box>
-        <box flexDirection="column" alignItems="center">
-          <text fg={theme.text}>1-9</text>
-          <text fg={theme.textMuted}>warp</text>
         </box>
         <box flexDirection="column" alignItems="center">
           <text fg={theme.text}>q</text>

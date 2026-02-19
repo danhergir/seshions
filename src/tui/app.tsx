@@ -4,6 +4,7 @@
  */
 
 import { render, useKeyboard, useRenderer, useTerminalDimensions } from "@opentui/solid"
+import { createCliRenderer } from "@opentui/core"
 import fs from "fs"
 import {
   ensureAppDirSync,
@@ -46,6 +47,48 @@ export interface TuiOptions {
   onExit?: () => Promise<void>
 }
 
+function restoreTerminalState(): void {
+  // Make sure stdin does not remain in raw mode after teardown.
+  if (process.stdin.isTTY) {
+    try {
+      process.stdin.setRawMode(false)
+    } catch {
+      // ignore
+    }
+    process.stdin.pause()
+  }
+
+  // Write synchronously to guarantee terminal reset before process exit.
+  const resetSequence = [
+    "\x1b[?1000l", // VT200 mouse
+    "\x1b[?1002l", // Button-event mouse
+    "\x1b[?1003l", // Any-event mouse
+    "\x1b[?1005l", // UTF-8 mouse encoding
+    "\x1b[?1006l", // SGR mouse encoding
+    "\x1b[?1015l", // URXVT mouse encoding
+    "\x1b[?1016l", // SGR pixel mouse encoding
+    "\x1b[?1004l", // Focus tracking
+    "\x1b[?1007l", // Alternate scroll mode
+    "\x1b[?2004l", // Bracketed paste
+    "\x1b[<u",     // Kitty keyboard protocol (disable)
+    "\x1b[?1l",    // Application cursor keys
+    "\x1b[?47l",   // Alternate buffer (legacy)
+    "\x1b[?1047l", // Alternate buffer
+    "\x1b[?1048l", // Restore cursor
+    "\x1b[?1049l", // Exit alternate screen buffer
+    "\x1b[?25h",   // Show cursor
+    "\x1b[0m",     // Reset attributes
+    "\x1b[2J\x1b[H" // Clear screen and move to top
+  ].join("")
+
+  try {
+    fs.writeSync(process.stdout.fd, resetSequence)
+  } catch {
+    // Fall back to buffered write if sync write is unavailable.
+    process.stdout.write(resetSequence)
+  }
+}
+
 export async function tui(options: TuiOptions = {}) {
   log("=== Seshions starting ===")
 
@@ -66,28 +109,59 @@ export async function tui(options: TuiOptions = {}) {
 
   const mode = options.mode ?? (await detectTerminalMode())
 
-  return new Promise<void>((resolve) => {
-    const onExit = async () => {
-      try {
-        storage.close()
-        await options.onExit?.()
-      } catch (e) {
-        // Ignore cleanup errors
-      }
-
-      // Restore terminal state before exiting
-      process.stdout.write("\x1b[?1049l") // Exit alternate screen buffer
-      process.stdout.write("\x1b[?25h")   // Show cursor
-      process.stdout.write("\x1b[0m")     // Reset all attributes
-      process.stdout.write("\x1b[2J\x1b[H") // Clear screen and move to top
-
+  let done = false
+  let resolveDone: () => void = () => {}
+  const donePromise = new Promise<void>((resolve) => {
+    resolveDone = () => {
+      if (done) return
+      done = true
       resolve()
-      process.exit(0)
+    }
+  })
+
+  const renderer = await createCliRenderer({
+    targetFps: 60,
+    exitOnCtrlC: false,
+    autoFocus: false,
+    useKittyKeyboard: {},
+    openConsoleOnError: true,
+    onDestroy: () => {
+      restoreTerminalState()
+      resolveDone()
+    }
+  })
+
+  let exiting = false
+  const onExit = async (exitCode: number) => {
+    if (exiting) return
+    exiting = true
+    process.exitCode = exitCode
+
+    try {
+      storage.close()
+      if (exitCode === 0) {
+        await options.onExit?.()
+      }
+    } catch {
+      // Ignore cleanup errors
     }
 
-    render(
+    try {
+      // Disable interactive terminal protocols immediately, then destroy renderer.
+      renderer.useMouse = false
+      renderer.disableKittyKeyboard()
+      renderer.destroy()
+    } catch {
+      // Fallback reset if renderer teardown fails.
+      restoreTerminalState()
+      resolveDone()
+    }
+  }
+
+  try {
+    await render(
       () => (
-        <ErrorBoundary fallback={(error: Error) => <ErrorComponent error={error} />}>
+        <ErrorBoundary fallback={(error: Error) => <ErrorComponent error={error} onExit={() => onExit(1)} />}>
           <KVProvider>
             <ConfigProvider>
               <RouteProvider>
@@ -97,7 +171,7 @@ export async function tui(options: TuiOptions = {}) {
                       <KeybindProvider>
                         <DialogProvider>
                           <CommandProvider>
-                            <App onExit={onExit} />
+                            <App onExit={() => onExit(0)} />
                           </CommandProvider>
                         </DialogProvider>
                       </KeybindProvider>
@@ -109,15 +183,14 @@ export async function tui(options: TuiOptions = {}) {
           </KVProvider>
         </ErrorBoundary>
       ),
-      {
-        targetFps: 60,
-        exitOnCtrlC: false,
-        autoFocus: false,
-        useKittyKeyboard: {},
-        openConsoleOnError: true
-      }
+      renderer
     )
-  })
+  } catch (error) {
+    await onExit(1)
+    throw error
+  }
+
+  return donePromise
 }
 
 function App(props: { onExit: () => Promise<void> }) {
@@ -248,12 +321,12 @@ function App(props: { onExit: () => Promise<void> }) {
   )
 }
 
-function ErrorComponent(props: { error: Error }) {
+function ErrorComponent(props: { error: Error; onExit: () => Promise<void> }) {
   const dimensions = useTerminalDimensions()
 
   useKeyboard((evt) => {
     if (evt.name === "q" || evt.name === "escape") {
-      process.exit(1)
+      props.onExit()
     }
   })
 

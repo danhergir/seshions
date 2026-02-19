@@ -29,7 +29,7 @@ export function SessionFooter(props: { session: Session }) {
       {/* Right: Keybind hints */}
       <box flexDirection="row" gap={2}>
         <text>
-          <span style={{ fg: theme.textMuted }}>Shift+R</span>
+          <span style={{ fg: theme.textMuted }}>r</span>
           <span style={{ fg: theme.text }}> rename</span>
         </text>
         <text>

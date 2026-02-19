@@ -26,11 +26,9 @@ const DEFAULT_KEYBINDS: KeybindConfig = {
   session_new: ["ctrl+n", "<leader>n"],
   command_palette: ["ctrl+k", "<leader>k"],
   help: ["?", "<leader>h"],
-  quit: ["ctrl+q", "<leader>q"],
+  quit: ["ctrl+c", "<leader>c"],
   detach: ["q", "escape"],
-  delete: ["d", "ctrl+d"],
-  restart: ["r", "ctrl+r"],
-  fork: ["f", "ctrl+f"]
+  delete: ["d", "ctrl+d"]
 }
 
 export function parseKeybind(str: string): KeybindInfo {

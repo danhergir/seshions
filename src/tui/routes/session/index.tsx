@@ -93,7 +93,7 @@ export function Session() {
     if (evt.name === "q" && !inputRef?.focused) {
       route.navigate({ type: "home" })
     }
-    if (evt.name === "R" && evt.shift && !inputRef?.focused) {
+    if (evt.name === "r" && !inputRef?.focused) {
       const s = session()
       if (s) {
         dialog.replace(() => <DialogRename session={s} />)

@@ -11,6 +11,7 @@ import { useSync } from "@tui/context/sync"
 import { useRoute } from "@tui/context/route"
 import { useDialog } from "@tui/ui/dialog"
 import { useToast } from "@tui/ui/toast"
+import { DialogRename } from "@tui/component/dialog-rename"
 import { DialogSelect, type DialogSelectOption } from "@tui/ui/dialog-select"
 import { attachSessionSync } from "@/core/tmux"
 import type { Session, SessionStatus } from "@/core/types"
@@ -74,26 +75,6 @@ export function DialogSessions() {
     }
   }
 
-  async function handleRestart(sessionId: string) {
-    try {
-      await sync.session.restart(sessionId)
-      toast.show({ message: "Session restarted", variant: "success", duration: 2000 })
-    } catch (err) {
-      toast.error(err as Error)
-    }
-  }
-
-  async function handleFork(sessionId: string) {
-    try {
-      const forked = await sync.session.fork({ sourceSessionId: sessionId })
-      toast.show({ message: `Forked as ${forked.title}`, variant: "success", duration: 2000 })
-      route.navigate({ type: "session", sessionId: forked.id })
-      dialog.clear()
-    } catch (err) {
-      toast.error(err as Error)
-    }
-  }
-
   function handleAttach(sessionId: string) {
     const session = sync.session.get(sessionId)
     if (!session) {
@@ -137,8 +118,11 @@ export function DialogSessions() {
       }}
       keybinds={[
         { key: "d", title: "Delete", onTrigger: (opt) => handleDelete(opt.value) },
-        { key: "r", title: "Restart", onTrigger: (opt) => handleRestart(opt.value) },
-        { key: "f", title: "Fork", onTrigger: (opt) => handleFork(opt.value) },
+        { key: "r", title: "Rename", onTrigger: (opt) => {
+          const session = sync.session.get(opt.value)
+          if (!session) return
+          dialog.push(() => <DialogRename session={session} />)
+        }},
         { key: "v", title: "View", onTrigger: (opt) => {
           route.navigate({ type: "session", sessionId: opt.value })
           dialog.clear()
