@@ -23,12 +23,18 @@ Options:
   --light        Use light mode theme
 
 Keyboard Shortcuts (in TUI):
+  Enter          Attach selected session
+  r              Rename selected session/group
+  d              Delete selected (with confirmation)
+  q              Detach / Back
   Ctrl+K         Action Hub
-  L              Session list
-  N              Launch session
-  P              Workspace profiles
-  Q              Close / Detach
-  ?              Help
+  n              Launch session
+  g              Create group
+  m              Move session to group
+  p              Workspace profiles
+
+Attached session:
+  Ctrl+C         Detach from tmux session
 `)
     process.exit(0)
   }

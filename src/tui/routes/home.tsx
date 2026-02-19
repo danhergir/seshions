@@ -18,7 +18,7 @@ import { DialogProfileManager } from "@tui/component/dialog-profile"
 import { attachSessionSync, capturePane, wasCommandPaletteRequested } from "@/core/tmux"
 import { useCommandDialog } from "@tui/component/dialog-command"
 import type { Session, Group } from "@/core/types"
-import { formatRelativeTime, formatSmartTime, truncatePath } from "@tui/util/locale"
+import { formatSmartTime, truncatePath } from "@tui/util/locale"
 import { STATUS_ICONS } from "@tui/util/status"
 import { sortSessionsByCreatedAt } from "@tui/util/session"
 import {
@@ -54,6 +54,18 @@ function stripAnsi(str: string): string {
 // Minimum width for dual-column layout
 const DUAL_COLUMN_MIN_WIDTH = 100
 const LEFT_PANEL_RATIO = 0.35
+
+interface FooterHint {
+  key: string
+  label: string
+}
+
+interface DeleteConfirmDialogProps {
+  title: string
+  message: string
+  confirmLabel: string
+  onConfirm: () => Promise<void>
+}
 
 export function Home() {
   const dimensions = useTerminalDimensions()
@@ -120,12 +132,6 @@ export function Home() {
     return item?.type === "session" ? item.session : undefined
   })
 
-  // Get the selected group (only if a group is selected)
-  const selectedGroup = createMemo(() => {
-    const item = selectedItem()
-    return item?.type === "group" ? item.group : undefined
-  })
-
   // Fetch preview with debounce; keep showing previous content while loading
   createEffect(() => {
     const session = selectedSession()
@@ -179,11 +185,13 @@ export function Home() {
   // Session stats
   const stats = createMemo(() => {
     const byStatus = sync.session.byStatus()
+
     return {
       running: byStatus.running.length,
       waiting: byStatus.waiting.length,
+      error: byStatus.error.length,
       idle: byStatus.idle.length,
-      total: sync.session.list().length
+      total: allSessions().length
     }
   })
 
@@ -197,7 +205,7 @@ export function Home() {
   }
 
   // Handle deleting a group
-  async function handleDeleteGroup(group: Group) {
+  async function executeDeleteGroup(group: Group) {
     const sessionCount = getGroupSessionCount(allSessions(), group.path)
 
     // Don't allow deleting default group
@@ -241,12 +249,57 @@ export function Home() {
     }
   }
 
-  async function handleDelete(session: Session) {
+  async function executeDeleteSession(session: Session) {
     try {
       await sync.session.delete(session.id)
       toast.show({ message: `Deleted ${session.title}`, variant: "info", duration: 2000 })
     } catch (err) {
       toast.error(err as Error)
+    }
+  }
+
+  function openDeleteConfirm(item: GroupedItem): void {
+    if (item.type === "session" && item.session) {
+      const sessionId = item.session.id
+      dialog.push(() => (
+        <DeleteConfirmDialog
+          title="Delete Session"
+          message={`Delete "${item.session!.title}"?`}
+          confirmLabel="Delete Session"
+          onConfirm={async () => {
+            const latest = sync.session.get(sessionId)
+            if (!latest) return
+            await executeDeleteSession(latest)
+          }}
+        />
+      ))
+      return
+    }
+
+    if (item.type === "group" && item.group) {
+      if (item.group.path === DEFAULT_GROUP_PATH) {
+        toast.show({ message: "Cannot delete the default group", variant: "error", duration: 2000 })
+        return
+      }
+
+      const groupPath = item.group.path
+      const count = getGroupSessionCount(allSessions(), groupPath)
+      const prompt = count > 0
+        ? `Delete "${item.group.name}" and move ${count} session${count === 1 ? "" : "s"} to My Sessions?`
+        : `Delete "${item.group.name}"?`
+
+      dialog.push(() => (
+        <DeleteConfirmDialog
+          title="Delete Group"
+          message={prompt}
+          confirmLabel="Delete Group"
+          onConfirm={async () => {
+            const latest = sync.group.get(groupPath)
+            if (!latest) return
+            await executeDeleteGroup(latest)
+          }}
+        />
+      ))
     }
   }
 
@@ -287,10 +340,8 @@ export function Home() {
     // d to delete session OR group
     if (evt.name === "d") {
       const item = selectedItem()
-      if (item?.type === "session" && item.session) {
-        handleDelete(item.session)
-      } else if (item?.type === "group" && item.group) {
-        handleDeleteGroup(item.group)
+      if (item) {
+        openDeleteConfirm(item)
       }
     }
 
@@ -467,8 +518,30 @@ export function Home() {
       }
     })
 
+    const cwd = createMemo(() => {
+      const max = Math.max(18, rightWidth() - (session.worktreeBranch ? 58 : 44))
+      return truncatePath(session.projectPath, max)
+    })
+
+    function MetaChip(props: { label: string; value: string; valueColor?: typeof theme.text }) {
+      return (
+        <box
+          flexDirection="row"
+          backgroundColor={theme.backgroundElement}
+          paddingLeft={1}
+          paddingRight={1}
+          gap={1}
+        >
+          <text fg={theme.textMuted}>{props.label}</text>
+          <text fg={props.valueColor ?? theme.text} attributes={TextAttributes.BOLD}>
+            {props.value}
+          </text>
+        </box>
+      )
+    }
+
     return (
-      <box flexDirection="column" paddingLeft={1} paddingRight={1}>
+      <box flexDirection="column" paddingLeft={1} paddingRight={1} gap={1}>
         {/* Session title and status */}
         <box flexDirection="row" justifyContent="space-between" height={1}>
           <text fg={theme.text} attributes={TextAttributes.BOLD}>
@@ -480,18 +553,12 @@ export function Home() {
           </box>
         </box>
 
-        {/* Session info */}
-        <box flexDirection="row" gap={2} height={1}>
-          <text fg={theme.textMuted}>PATH</text>
-          <text fg={theme.text}>{truncatePath(session.projectPath, rightWidth() - 26)}</text>
-        </box>
-
-        {/* More info */}
-        <box flexDirection="row" gap={2} height={1}>
-          <text fg={theme.accent}>TOOL:{session.tool}</text>
-          <text fg={theme.textMuted}>AGE:{formatRelativeTime(session.lastAccessed)}</text>
+        {/* Structured metadata chips */}
+        <box flexDirection="row" gap={1} height={1}>
+          <MetaChip label="TOOL" value={session.tool.toUpperCase()} valueColor={theme.accent} />
+          <MetaChip label="CWD" value={cwd()} />
           <Show when={session.worktreeBranch}>
-            <text fg={theme.info}>BRANCH:{session.worktreeBranch}</text>
+            <MetaChip label="BRANCH" value={session.worktreeBranch!} valueColor={theme.secondary} />
           </Show>
         </box>
 
@@ -530,6 +597,85 @@ export function Home() {
     )
   }
 
+  function DeleteConfirmDialog(props: DeleteConfirmDialogProps) {
+    const [submitting, setSubmitting] = createSignal(false)
+
+    async function confirmDelete() {
+      if (submitting()) return
+      setSubmitting(true)
+      try {
+        await props.onConfirm()
+        dialog.pop()
+      } catch (err) {
+        toast.error(err as Error)
+      } finally {
+        setSubmitting(false)
+      }
+    }
+
+    useKeyboard((evt) => {
+      if (evt.name === "escape" || evt.name === "n") {
+        evt.preventDefault()
+        dialog.pop()
+      }
+      if (evt.name === "y" || (evt.name === "return" && !evt.shift)) {
+        evt.preventDefault()
+        void confirmDelete()
+      }
+    })
+
+    return (
+      <box gap={1} paddingBottom={1}>
+        <box paddingLeft={4} paddingRight={4}>
+          <text fg={theme.error} attributes={TextAttributes.BOLD}>
+            {props.title}
+          </text>
+        </box>
+
+        <box paddingLeft={4} paddingRight={4}>
+          <text fg={theme.text}>{props.message}</text>
+        </box>
+
+        <box paddingLeft={4} paddingRight={4} paddingTop={1} flexDirection="row" gap={2}>
+          <box
+            backgroundColor={submitting() ? theme.backgroundElement : theme.error}
+            paddingLeft={2}
+            paddingRight={2}
+            paddingTop={1}
+            paddingBottom={1}
+          >
+            <text fg={theme.selectedListItemText} attributes={TextAttributes.BOLD}>
+              {submitting() ? "Deleting..." : props.confirmLabel}
+            </text>
+          </box>
+        </box>
+
+        <box paddingLeft={4} paddingRight={4}>
+          <text fg={theme.textMuted}>Y/Enter: confirm | N/Esc: cancel</text>
+        </box>
+      </box>
+    )
+  }
+
+  const footerHints = createMemo<FooterHint[]>(() => {
+    const base: FooterHint[] = [
+      { key: "↑↓", label: "scan" },
+      { key: "Enter", label: "attach" },
+      { key: "r", label: "rename" },
+      { key: "q", label: "detach" },
+      { key: "Ctrl+K", label: "palette" }
+    ]
+
+    const item = selectedItem()
+    if (item?.type === "session") {
+      return [...base, { key: "d", label: "drop" }, { key: "m", label: "move" }]
+    }
+    if (item?.type === "group") {
+      return [...base, { key: "d", label: "drop-group" }, { key: "g", label: "new-group" }]
+    }
+    return [...base, { key: "n", label: "launch" }, { key: "g", label: "group" }]
+  })
+
   return (
     <box
       flexDirection="column"
@@ -537,7 +683,7 @@ export function Home() {
       height={dimensions().height}
       backgroundColor={theme.background}
     >
-      {/* Header */}
+      {/* Header brand */}
       <box
         flexDirection="row"
         justifyContent="space-between"
@@ -547,19 +693,26 @@ export function Home() {
         backgroundColor={theme.backgroundPanel}
       >
         <text fg={theme.primary} attributes={TextAttributes.BOLD}>
-          SESHIONS // INDUSTRIAL DECK
+          SESHIONS
         </text>
+        <text fg={theme.textMuted}>CTRL+K ACTION HUB</text>
+      </box>
+
+      {/* Header summary */}
+      <box
+        flexDirection="row"
+        justifyContent="space-between"
+        paddingLeft={2}
+        paddingRight={2}
+        height={1}
+        backgroundColor={theme.backgroundElement}
+      >
         <box flexDirection="row" gap={2}>
-          <Show when={stats().running > 0}>
-            <text fg={theme.success}>RUN {stats().running}</text>
-          </Show>
-          <Show when={stats().waiting > 0}>
-            <text fg={theme.warning}>WAIT {stats().waiting}</text>
-          </Show>
-          <Show when={stats().idle > 0}>
-            <text fg={theme.textMuted}>IDLE {stats().idle}</text>
-          </Show>
-          <text fg={theme.textMuted}>TOTAL {stats().total}</text>
+          <text fg={theme.success}>RUN {stats().running}</text>
+          <text fg={theme.warning}>WAIT {stats().waiting}</text>
+          <text fg={theme.error}>ERR {stats().error}</text>
+          <text fg={theme.textMuted}>IDLE {stats().idle}</text>
+          <text fg={theme.info}>TOTAL {stats().total}</text>
         </box>
       </box>
 
@@ -672,46 +825,21 @@ export function Home() {
         width={dimensions().width}
         paddingLeft={2}
         paddingRight={2}
-        height={2}
+        height={1}
         backgroundColor={theme.backgroundPanel}
-        justifyContent="space-between"
+        alignItems="center"
       >
-        <box flexDirection="column" alignItems="center">
-          <text fg={theme.text}>↑↓</text>
-          <text fg={theme.textMuted}>scan</text>
-        </box>
-        <box flexDirection="column" alignItems="center">
-          <text fg={theme.text}>Enter</text>
-          <text fg={theme.textMuted}>attach</text>
-        </box>
-        <box flexDirection="column" alignItems="center">
-          <text fg={theme.text}>n</text>
-          <text fg={theme.textMuted}>launch</text>
-        </box>
-        <box flexDirection="column" alignItems="center">
-          <text fg={theme.text}>g</text>
-          <text fg={theme.textMuted}>group</text>
-        </box>
-        <box flexDirection="column" alignItems="center">
-          <text fg={theme.text}>m</text>
-          <text fg={theme.textMuted}>move</text>
-        </box>
-        <box flexDirection="column" alignItems="center">
-          <text fg={theme.text}>p</text>
-          <text fg={theme.textMuted}>profiles</text>
-        </box>
-        <box flexDirection="column" alignItems="center">
-          <text fg={theme.text}>d</text>
-          <text fg={theme.textMuted}>drop</text>
-        </box>
-        <box flexDirection="column" alignItems="center">
-          <text fg={theme.text}>r</text>
-          <text fg={theme.textMuted}>rename</text>
-        </box>
-        <box flexDirection="column" alignItems="center">
-          <text fg={theme.text}>q</text>
-          <text fg={theme.textMuted}>detach</text>
-        </box>
+        <For each={footerHints()}>
+          {(hint, index) => (
+            <box flexDirection="row" alignItems="center">
+              <text fg={theme.text}>{hint.key}</text>
+              <text fg={theme.textMuted}> {hint.label}</text>
+              <Show when={index() < footerHints().length - 1}>
+                <text fg={theme.border}>  •  </text>
+              </Show>
+            </box>
+          )}
+        </For>
       </box>
     </box>
   )

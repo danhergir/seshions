@@ -10,6 +10,12 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 - Optional git worktree isolation per session
 - Persist session state across restarts via tmux
 
+## Keyboard UX
+
+- Footer is contextual: it always shows core keys (`Enter`, `r`, `q`, `Ctrl+K`) and adapts extra hints based on what is selected.
+- `Ctrl+K` opens the Action Hub (command palette) for advanced actions.
+- Pressing `d` opens a confirmation dialog before deleting a session or group.
+
 ## Requirements
 
 - Node.js 18+

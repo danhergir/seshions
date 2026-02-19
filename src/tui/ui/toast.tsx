@@ -6,7 +6,7 @@
 import { createContext, useContext, type ParentProps, For, Show } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { TextAttributes, RGBA } from "@opentui/core"
-import { useTerminalDimensions } from "@opentui/solid"
+import { useKeyboard } from "@opentui/solid"
 import { useTheme } from "@tui/context/theme"
 
 export interface Toast {
@@ -15,6 +15,9 @@ export interface Toast {
   message: string
   variant: "info" | "success" | "warning" | "error"
   duration: number
+  actionLabel?: string
+  actionKey?: string
+  onAction?: () => void
 }
 
 interface ToastState {
@@ -25,6 +28,7 @@ interface ToastContext {
   show(options: Omit<Toast, "id"> | string): void
   error(err: Error | string): void
   dismiss(id: string): void
+  action(id: string): void
 }
 
 const ctx = createContext<ToastContext>()
@@ -68,12 +72,23 @@ export function ToastProvider(props: ParentProps) {
     )
   }
 
-  const value: ToastContext = { show, error, dismiss }
+  function action(id: string): void {
+    const toast = state.toasts.find((t) => t.id === id)
+    if (!toast?.onAction) return
+
+    try {
+      toast.onAction()
+    } finally {
+      dismiss(id)
+    }
+  }
+
+  const value: ToastContext = { show, error, dismiss, action }
 
   return (
     <ctx.Provider value={value}>
       {props.children}
-      <ToastContainer toasts={state.toasts} onDismiss={dismiss} />
+      <ToastContainer toasts={state.toasts} onDismiss={dismiss} onAction={action} />
     </ctx.Provider>
   )
 }
@@ -86,8 +101,11 @@ export function useToast(): ToastContext {
   return value
 }
 
-function ToastContainer(props: { toasts: Toast[]; onDismiss: (id: string) => void }) {
-  const dimensions = useTerminalDimensions()
+function ToastContainer(props: {
+  toasts: Toast[]
+  onDismiss: (id: string) => void
+  onAction: (id: string) => void
+}) {
   const { theme } = useTheme()
 
   const variantColors = {
@@ -96,6 +114,23 @@ function ToastContainer(props: { toasts: Toast[]; onDismiss: (id: string) => voi
     warning: theme.warning,
     error: theme.error
   }
+
+  useKeyboard((evt) => {
+    if (props.toasts.length === 0) return
+    if (evt.ctrl || evt.meta) return
+
+    const key = evt.name?.toLowerCase()
+    if (!key) return
+
+    const actionable = [...props.toasts]
+      .reverse()
+      .find((toast) => toast.onAction && (toast.actionKey || "u").toLowerCase() === key)
+
+    if (!actionable) return
+
+    evt.preventDefault()
+    props.onAction(actionable.id)
+  })
 
   return (
     <Show when={props.toasts.length > 0}>
@@ -111,7 +146,7 @@ function ToastContainer(props: { toasts: Toast[]; onDismiss: (id: string) => voi
             <box
               backgroundColor={theme.backgroundPanel}
               padding={1}
-              width={40}
+              width={52}
             >
               <box flexDirection="column" gap={0}>
                 <Show when={toast.title}>
@@ -123,6 +158,14 @@ function ToastContainer(props: { toasts: Toast[]; onDismiss: (id: string) => voi
                   </text>
                 </Show>
                 <text fg={theme.text}>{toast.message}</text>
+                <Show when={toast.actionLabel && toast.onAction}>
+                  <box flexDirection="row" gap={1}>
+                    <text fg={theme.info} attributes={TextAttributes.BOLD}>
+                      [{(toast.actionKey || "u").toUpperCase()}]
+                    </text>
+                    <text fg={theme.info}>{toast.actionLabel}</text>
+                  </box>
+                </Show>
               </box>
             </box>
           )}
