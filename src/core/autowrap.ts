@@ -1,5 +1,5 @@
 import { spawnSync } from "child_process"
-import { constants as fsConstants } from "fs"
+import { constants as fsConstants, realpathSync } from "fs"
 import {
   access,
   chmod,
@@ -59,9 +59,20 @@ function quoteShell(value: string): string {
 }
 
 function getWrapInvoker(): string {
-  const scriptPath = process.argv[1] || ""
-  if (scriptPath && scriptPath.endsWith(".js")) {
-    return `${quoteShell(process.execPath)} ${quoteShell(path.resolve(scriptPath))}`
+  const argPath = process.argv[1] || ""
+  if (argPath) {
+    try {
+      const resolved = realpathSync(argPath)
+      if (/\.(mjs|cjs|js)$/i.test(resolved)) {
+        return `${quoteShell(process.execPath)} ${quoteShell(resolved)}`
+      }
+    } catch {
+      // Fall back to argv resolution below.
+    }
+
+    if (/\.(mjs|cjs|js)$/i.test(argPath)) {
+      return `${quoteShell(process.execPath)} ${quoteShell(path.resolve(argPath))}`
+    }
   }
   return quoteShell(process.execPath)
 }

@@ -9,7 +9,7 @@ import {
   unlink,
   writeFile
 } from "node:fs/promises"
-import { constants as fsConstants } from "node:fs"
+import { constants as fsConstants, realpathSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 
@@ -36,9 +36,20 @@ function quoteShell(value) {
 }
 
 function getWrapInvoker() {
-  const scriptPath = process.argv[1] || ""
-  if (scriptPath && scriptPath.endsWith(".js")) {
-    return `${quoteShell(process.execPath)} ${quoteShell(path.resolve(scriptPath))}`
+  const argPath = process.argv[1] || ""
+  if (argPath) {
+    try {
+      const resolved = realpathSync(argPath)
+      if (/\.(mjs|cjs|js)$/i.test(resolved)) {
+        return `${quoteShell(process.execPath)} ${quoteShell(resolved)}`
+      }
+    } catch {
+      // Fall back to argv resolution below.
+    }
+
+    if (/\.(mjs|cjs|js)$/i.test(argPath)) {
+      return `${quoteShell(process.execPath)} ${quoteShell(path.resolve(argPath))}`
+    }
   }
   return quoteShell(process.execPath)
 }
