@@ -16,6 +16,12 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 - `Ctrl+K` opens the Action Hub (command palette) for advanced actions.
 - Pressing `d` opens a confirmation dialog before deleting a session or group.
 
+## Updates
+
+- `seshions` checks npm once per day and shows an upgrade hint when a newer version is available.
+- Upgrade command: `npm install -g seshions@latest`
+- Disable update checks with `SESHIONS_DISABLE_UPDATE_CHECK=1`
+
 ## Requirements
 
 - Node.js 18+

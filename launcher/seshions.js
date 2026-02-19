@@ -1,8 +1,15 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process"
-import { readFile } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 import { ensureRuntime } from "../scripts/runtime/resolve-runtime.mjs"
+
+const APP = "seshions"
+const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
+const UPDATE_TIMEOUT_MS = 1500
+const UPDATE_STATE_PATH = path.join(os.homedir(), ".seshions", "update-check.json")
 
 async function readPackageVersion() {
   const packagePath = new URL("../package.json", import.meta.url)
@@ -10,15 +17,115 @@ async function readPackageVersion() {
   return String(pkg.version || "").replace(/^v/, "")
 }
 
-async function main() {
-  const args = process.argv.slice(2)
+function normalizeVersion(version) {
+  return String(version || "").replace(/^v/, "").trim()
+}
 
-  if (args.includes("--version") || args.includes("-v")) {
-    console.log(await readPackageVersion())
+function isNewerVersion(latest, current) {
+  const a = normalizeVersion(latest).split(".").map((part) => Number(part) || 0)
+  const b = normalizeVersion(current).split(".").map((part) => Number(part) || 0)
+  const size = Math.max(a.length, b.length, 3)
+
+  for (let i = 0; i < size; i += 1) {
+    const left = a[i] || 0
+    const right = b[i] || 0
+    if (left > right) return true
+    if (left < right) return false
+  }
+
+  return false
+}
+
+async function readUpdateState() {
+  try {
+    const raw = await readFile(UPDATE_STATE_PATH, "utf8")
+    const parsed = JSON.parse(raw)
+    return {
+      lastCheckedAt: Number(parsed?.lastCheckedAt) || 0,
+      latestVersion: normalizeVersion(parsed?.latestVersion || "")
+    }
+  } catch {
+    return { lastCheckedAt: 0, latestVersion: "" }
+  }
+}
+
+async function writeUpdateState(state) {
+  try {
+    await mkdir(path.dirname(UPDATE_STATE_PATH), { recursive: true })
+    await writeFile(UPDATE_STATE_PATH, JSON.stringify(state), "utf8")
+  } catch {
+    // Ignore update cache errors.
+  }
+}
+
+async function fetchLatestNpmVersion() {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), UPDATE_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(`https://registry.npmjs.org/${APP}/latest`, {
+      headers: { Accept: "application/json" },
+      signal: controller.signal
+    })
+
+    if (!response.ok) {
+      throw new Error(`npm registry error (${response.status})`)
+    }
+
+    const data = await response.json()
+    return normalizeVersion(data?.version || "")
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function printUpdateHint(currentVersion, latestVersion) {
+  console.log(
+    `[seshions] Update available: v${currentVersion} -> v${latestVersion}. Run: npm install -g seshions@latest`
+  )
+}
+
+async function maybeNotifyUpdate(currentVersion) {
+  if (process.env.SESHIONS_DISABLE_UPDATE_CHECK === "1") {
     return
   }
 
-  const desiredVersion = process.env.SESHIONS_RUNTIME_VERSION || await readPackageVersion()
+  const state = await readUpdateState()
+  const now = Date.now()
+  const shouldRefresh = now - state.lastCheckedAt >= UPDATE_CHECK_INTERVAL_MS
+
+  if (state.latestVersion && isNewerVersion(state.latestVersion, currentVersion)) {
+    printUpdateHint(currentVersion, state.latestVersion)
+  }
+
+  if (!shouldRefresh) {
+    return
+  }
+
+  try {
+    const latestVersion = await fetchLatestNpmVersion()
+    await writeUpdateState({ lastCheckedAt: now, latestVersion })
+
+    if (latestVersion && isNewerVersion(latestVersion, currentVersion) && latestVersion !== state.latestVersion) {
+      printUpdateHint(currentVersion, latestVersion)
+    }
+  } catch {
+    await writeUpdateState({ lastCheckedAt: now, latestVersion: state.latestVersion })
+  }
+}
+
+async function main() {
+  const args = process.argv.slice(2)
+  const installedVersion = await readPackageVersion()
+
+  if (args.includes("--version") || args.includes("-v")) {
+    console.log(installedVersion)
+    return
+  }
+
+  await maybeNotifyUpdate(installedVersion)
+
+  const desiredVersion = process.env.SESHIONS_RUNTIME_VERSION || installedVersion
   const runtime = await ensureRuntime({
     version: desiredVersion,
     allowLatestFallback: true
