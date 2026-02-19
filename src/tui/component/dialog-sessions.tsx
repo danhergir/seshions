@@ -88,7 +88,6 @@ export function DialogSessions() {
     }
 
     // Suspend the TUI
-    sync.session.markAccessed(sessionId)
     renderer.suspend()
 
     // Use sync attach - this blocks the event loop completely

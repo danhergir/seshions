@@ -269,27 +269,18 @@ export function attachSession(name: string): void {
 }
 
 /**
- * List all tmux sessions
+ * List all sessions with our prefix
  */
-export async function listAllSessions(): Promise<string[]> {
+export async function listSessions(): Promise<string[]> {
   try {
     const { stdout } = await execAsync("tmux list-sessions -F #{session_name}")
     return stdout
       .trim()
       .split("\n")
-      .map((name) => name.trim())
-      .filter(Boolean)
+      .filter((name) => name.startsWith(SESSION_PREFIX))
   } catch {
     return []
   }
-}
-
-/**
- * List sessions with our prefix
- */
-export async function listSessions(): Promise<string[]> {
-  const sessions = await listAllSessions()
-  return sessions.filter((name) => name.startsWith(SESSION_PREFIX))
 }
 
 /**
@@ -310,18 +301,6 @@ export async function getCurrentSession(): Promise<string | null> {
     return stdout.trim()
   } catch {
     return null
-  }
-}
-
-/**
- * Get current working directory for a tmux session.
- */
-export async function getSessionPath(name: string): Promise<string> {
-  try {
-    const { stdout } = await execAsync(`tmux display-message -t "${name}" -p "#{pane_current_path}"`)
-    return stdout.trim() || process.cwd()
-  } catch {
-    return process.cwd()
   }
 }
 

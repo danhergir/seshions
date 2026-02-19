@@ -10,8 +10,7 @@ import * as tmux from "./tmux"
 import { randomUUID } from "crypto"
 import fs from "fs"
 import { getClaudeSessionID, buildForkCommand, canFork, buildClaudeCommand } from "./claude"
-import { getDebugLogPath, SESSION_PREFIX } from "./app-paths"
-import { detectImportedTool, humanizeImportedSessionTitle } from "./import-detection"
+import { getDebugLogPath } from "./app-paths"
 
 const logFile = getDebugLogPath()
 function log(...args: unknown[]) {
@@ -32,9 +31,6 @@ const NOUNS = [
   "pike", "rook", "toad", "vole", "wren", "yak", "bass", "crab"
 ]
 
-const EXTERNAL_IMPORT_INTERVAL_MS = 5000
-const DEFAULT_GROUP_PATH = "my-sessions"
-
 function generateTitle(): string {
   const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)]
   const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)]
@@ -43,7 +39,6 @@ function generateTitle(): string {
 
 export class SessionManager {
   private refreshInterval: NodeJS.Timeout | null = null
-  private lastImportAt = 0
 
   /**
    * Start the session status refresh loop
@@ -71,16 +66,6 @@ export class SessionManager {
    */
   async refreshStatuses(): Promise<void> {
     await tmux.refreshSessionCache()
-
-    const now = Date.now()
-    if (now - this.lastImportAt >= EXTERNAL_IMPORT_INTERVAL_MS) {
-      this.lastImportAt = now
-      try {
-        await this.importExternalSessions()
-      } catch (err) {
-        log("importExternalSessions error:", err)
-      }
-    }
 
     const storage = getStorage()
     const sessions = storage.loadSessions()
@@ -155,8 +140,7 @@ export class SessionManager {
         command,
         cwd: options.projectPath,
         env: {
-          SESHIONS_SESSION: id,
-          SESHIONS_WRAP_BYPASS: "1"
+          SESHIONS_SESSION: id
         }
       })
       log("tmux session created successfully")
@@ -332,11 +316,7 @@ export class SessionManager {
     await tmux.createSession({
       name: newTmuxName,
       command: session.command,
-      cwd: session.projectPath,
-      env: {
-        SESHIONS_SESSION: session.id,
-        SESHIONS_WRAP_BYPASS: "1"
-      }
+      cwd: session.projectPath
     })
 
     // Update session
@@ -458,88 +438,6 @@ export class SessionManager {
     const storage = getStorage()
     storage.setAcknowledged(sessionId, true)
     storage.touch()
-  }
-
-  /**
-   * Update a session's last-accessed timestamp.
-   */
-  markAccessed(sessionId: string): void {
-    const storage = getStorage()
-    storage.updateSessionField(sessionId, "last_accessed", Date.now())
-    storage.touch()
-  }
-
-  /**
-   * Import external tmux sessions (non-seshions sessions) into storage.
-   */
-  async importExternalSessions(): Promise<number> {
-    const storage = getStorage()
-    const existingSessions = storage.loadSessions()
-    const existingTmuxNames = new Set(
-      existingSessions.map((session) => session.tmuxSession).filter(Boolean)
-    )
-
-    const tmuxSessionNames = await tmux.listAllSessions()
-    if (tmuxSessionNames.length === 0) return 0
-
-    let imported = 0
-    let nextOrder = existingSessions.length
-
-    for (const tmuxName of tmuxSessionNames) {
-      if (!tmuxName) continue
-      if (tmuxName.startsWith(SESSION_PREFIX)) continue
-      if (existingTmuxNames.has(tmuxName)) continue
-
-      let panePreview = ""
-      try {
-        panePreview = await tmux.capturePane(tmuxName, { startLine: -80, join: true })
-      } catch {
-        panePreview = ""
-      }
-
-      const detection = detectImportedTool(tmuxName, panePreview)
-      const projectPath = await tmux.getSessionPath(tmuxName)
-      const now = new Date()
-
-      const session: Session = {
-        id: randomUUID(),
-        title: humanizeImportedSessionTitle(tmuxName),
-        projectPath,
-        groupPath: DEFAULT_GROUP_PATH,
-        order: nextOrder,
-        command: getToolCommand(detection.tool),
-        wrapper: "",
-        tool: detection.tool,
-        status: "idle",
-        tmuxSession: tmuxName,
-        createdAt: now,
-        lastAccessed: now,
-        parentSessionId: "",
-        worktreePath: "",
-        worktreeRepo: "",
-        worktreeBranch: "",
-        toolData: {
-          imported: true,
-          source: "tmux",
-          detectedBy: detection.detectedBy,
-          importedAt: now.toISOString(),
-          externalTmuxSession: tmuxName
-        },
-        acknowledged: false
-      }
-
-      storage.saveSession(session)
-      existingTmuxNames.add(tmuxName)
-      imported += 1
-      nextOrder += 1
-    }
-
-    if (imported > 0) {
-      storage.touch()
-      log(`Imported ${imported} external tmux session(s)`)
-    }
-
-    return imported
   }
 
   /**
