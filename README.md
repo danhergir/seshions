@@ -5,6 +5,8 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 ## What It Does
 
 - Launch and track multiple AI coding sessions in one dashboard
+- Launch blueprints to spin up multiple role-based sessions in one action
+- Dispatch prompts to a single role or broadcast to all sessions in a group
 - Attach/detach quickly with keyboard-first controls
 - Group sessions by workflow
 - Optional git worktree isolation per session
@@ -14,7 +16,9 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 
 - Footer is contextual: it always shows core keys (`Enter`, `r`, `q`, `Ctrl+K`) and adapts extra hints based on what is selected.
 - `Ctrl+K` opens the Action Hub (command palette) for advanced actions.
+- Action Hub includes orchestration commands: `Dispatch to role` and `Broadcast to group`.
 - Pressing `d` opens a confirmation dialog before deleting a session or group.
+- Press `b` to open Launch Blueprints.
 
 ## Updates
 
@@ -44,6 +48,27 @@ seshions
 ```
 
 The npm launcher downloads the matching native runtime automatically and caches it in `~/.seshions/runtime`.
+
+## Launch Blueprints (Multi-Agent Spawn)
+
+Create and launch a reusable multi-session template:
+
+1. Open `seshions`
+2. Press `b` (or `Ctrl+K` -> `Launch blueprints`)
+3. Create blueprint:
+   - Name
+   - Group path
+   - Worktree root path
+   - Roles list (`planner,builder,debugger,reviewer,explorer`)
+   - Tool + command template (`codex "You are the ${role} agent for this workspace. Stay in this role."`)
+   - Note for Codex: `--agent` is not supported by Codex CLI
+4. Select blueprint and launch all sessions at once
+
+## Orchestration (From One Controller Session)
+
+1. Open Action Hub with `Ctrl+K`
+2. Choose `Dispatch to role` to send one prompt to a single target session
+3. Or choose `Broadcast to group` to send one prompt to every active session in that group
 
 ## Local Development
 

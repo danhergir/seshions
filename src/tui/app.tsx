@@ -32,6 +32,8 @@ import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command
 import { DialogSessions } from "@tui/component/dialog-sessions"
 import { DialogNew } from "@tui/component/dialog-new"
 import { DialogProfileManager } from "@tui/component/dialog-profile"
+import { DialogBlueprintManager } from "@tui/component/dialog-blueprint"
+import { DialogBroadcastGroupSelect, DialogDispatchRoleSelect } from "@tui/component/dialog-orchestrate"
 import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
 import { getStorage, setStorage, Storage } from "@/core/storage"
@@ -245,6 +247,31 @@ function App(props: { onExit: () => Promise<void> }) {
         }
       },
       {
+        title: "Launch blueprints",
+        value: "session.blueprints",
+        category: "Session",
+        keybind: "B",
+        onSelect: () => {
+          dialog.replace(() => <DialogBlueprintManager />)
+        }
+      },
+      {
+        title: "Dispatch to role",
+        value: "orchestrate.dispatch",
+        category: "Orchestration",
+        onSelect: () => {
+          dialog.replace(() => <DialogDispatchRoleSelect />)
+        }
+      },
+      {
+        title: "Broadcast to group",
+        value: "orchestrate.broadcast",
+        category: "Orchestration",
+        onSelect: () => {
+          dialog.replace(() => <DialogBroadcastGroupSelect />)
+        }
+      },
+      {
         title: "Go home",
         value: "nav.home",
         category: "Navigation",
@@ -289,6 +316,10 @@ function App(props: { onExit: () => Promise<void> }) {
       dialog.replace(() => <DialogProfileManager />)
     }
 
+    if (evt.name === "b") {
+      dialog.replace(() => <DialogBlueprintManager />)
+    }
+
     if (evt.name === "q") {
       props.onExit()
     }
@@ -296,7 +327,7 @@ function App(props: { onExit: () => Promise<void> }) {
     if (evt.name === "?") {
       toast.show({
         title: "Help",
-        message: "Ctrl+K: Action Hub | L: Sessions | N: New | P: Profiles | Q: Quit",
+        message: "Ctrl+K: Action Hub | N: New | B: Blueprints | P: Profiles | Q: Quit",
         variant: "info",
         duration: 5000
       })

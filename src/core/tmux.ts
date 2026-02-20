@@ -2,7 +2,7 @@
  * Tmux session management
  */
 
-import { spawn, exec } from "child_process"
+import { spawn, exec, execFile } from "child_process"
 import { promisify } from "util"
 import { SESSION_PREFIX as PRIMARY_SESSION_PREFIX } from "./app-paths"
 
@@ -18,6 +18,7 @@ async function getPty() {
 }
 
 const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 
 // Session cache - reduces subprocess spawns
 interface SessionCache {
@@ -160,7 +161,6 @@ export async function createSession(options: {
 
     // Send the command and press Enter
     await sendKeys(options.name, cmdToSend)
-    await execAsync(`tmux send-keys -t "${options.name}" Enter`)
   }
 }
 
@@ -180,20 +180,25 @@ export async function killSession(name: string): Promise<void> {
  * Send keys to a tmux session
  */
 export async function sendKeys(name: string, keys: string): Promise<void> {
-  // Escape special characters for tmux
-  const escaped = keys
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
-    .replace(/\$/g, "\\$")
+  // Prefer paste-buffer for reliability with interactive CLIs.
+  // Fallback to literal key send if buffer operations fail.
+  try {
+    await execFileAsync("tmux", ["set-buffer", "--", keys])
+    await execFileAsync("tmux", ["paste-buffer", "-d", "-t", name])
+  } catch {
+    await execFileAsync("tmux", ["send-keys", "-t", name, "-l", keys])
+  }
 
-  await execAsync(`tmux send-keys -t "${name}" "${escaped}" Enter`)
+  // Small delay helps CLIs process pasted text before submit.
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  await execFileAsync("tmux", ["send-keys", "-t", name, "Enter"])
 }
 
 /**
  * Send raw keys without Enter
  */
 export async function sendRawKeys(name: string, keys: string): Promise<void> {
-  await execAsync(`tmux send-keys -t "${name}" "${keys}"`)
+  await execFileAsync("tmux", ["send-keys", "-t", name, keys])
 }
 
 /**

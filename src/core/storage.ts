@@ -7,10 +7,19 @@ import { Database } from "bun:sqlite"
 import path from "path"
 import fs from "fs"
 import { randomUUID } from "crypto"
-import type { Session, Group, Profile, StatusUpdate, Tool, SessionStatus } from "./types"
+import type {
+  Session,
+  Group,
+  Profile,
+  Blueprint,
+  BlueprintEntry,
+  StatusUpdate,
+  Tool,
+  SessionStatus
+} from "./types"
 import { getStateDbPath } from "./app-paths"
 
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 
 export interface StorageOptions {
   dbPath?: string
@@ -93,6 +102,17 @@ export class Storage {
         default_custom_command TEXT NOT NULL DEFAULT '',
         use_worktree INTEGER NOT NULL DEFAULT 0,
         default_base_branch TEXT NOT NULL DEFAULT 'main',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `)
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS blueprints (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        group_path TEXT NOT NULL DEFAULT 'my-sessions',
+        entries_json TEXT NOT NULL DEFAULT '[]',
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       )
@@ -517,6 +537,161 @@ export class Storage {
 
   deleteProfile(id: string): void {
     const stmt = this.db.prepare("DELETE FROM profiles WHERE id = ?")
+    stmt.run(id)
+  }
+
+  // Blueprint CRUD
+
+  private parseBlueprintEntries(raw: string): BlueprintEntry[] {
+    try {
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return []
+
+      return parsed
+        .filter((entry) => entry && typeof entry === "object")
+        .map((entry) => ({
+          title: String(entry.title || "").trim(),
+          projectPath: String(entry.projectPath || "").trim(),
+          tool: (entry.tool as Tool) || "shell",
+          command: String(entry.command || "").trim()
+        }))
+        .filter((entry) => entry.title && entry.projectPath)
+    } catch {
+      return []
+    }
+  }
+
+  private blueprintFromRow(row: any): Blueprint {
+    return {
+      id: row.id,
+      name: row.name,
+      groupPath: row.group_path,
+      entries: this.parseBlueprintEntries(row.entries_json),
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at)
+    }
+  }
+
+  listBlueprints(): Blueprint[] {
+    if (this.closed) return []
+    const stmt = this.db.prepare(`
+      SELECT
+        id,
+        name,
+        group_path,
+        entries_json,
+        created_at,
+        updated_at
+      FROM blueprints
+      ORDER BY updated_at DESC, name ASC
+    `)
+
+    const rows = stmt.all() as any[]
+    return rows.map((row) => this.blueprintFromRow(row))
+  }
+
+  getBlueprint(id: string): Blueprint | null {
+    if (this.closed) return null
+    const stmt = this.db.prepare(`
+      SELECT
+        id,
+        name,
+        group_path,
+        entries_json,
+        created_at,
+        updated_at
+      FROM blueprints
+      WHERE id = ?
+    `)
+    const row = stmt.get(id) as any
+    return row ? this.blueprintFromRow(row) : null
+  }
+
+  createBlueprint(input: Omit<Blueprint, "id" | "createdAt" | "updatedAt">): Blueprint {
+    const now = Date.now()
+    const id = randomUUID()
+    const stmt = this.db.prepare(`
+      INSERT INTO blueprints (
+        id,
+        name,
+        group_path,
+        entries_json,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `)
+
+    const entries = input.entries.map((entry) => ({
+      title: entry.title.trim(),
+      projectPath: entry.projectPath.trim(),
+      tool: entry.tool,
+      command: entry.command.trim()
+    }))
+
+    stmt.run(
+      id,
+      input.name,
+      input.groupPath,
+      JSON.stringify(entries),
+      now,
+      now
+    )
+
+    return {
+      ...input,
+      entries,
+      id,
+      createdAt: new Date(now),
+      updatedAt: new Date(now)
+    }
+  }
+
+  updateBlueprint(
+    id: string,
+    updates: Partial<Omit<Blueprint, "id" | "createdAt" | "updatedAt">>
+  ): Blueprint | null {
+    const current = this.getBlueprint(id)
+    if (!current) return null
+
+    const next: Blueprint = {
+      ...current,
+      ...updates,
+      updatedAt: new Date()
+    }
+
+    const entries = next.entries.map((entry) => ({
+      title: entry.title.trim(),
+      projectPath: entry.projectPath.trim(),
+      tool: entry.tool,
+      command: entry.command.trim()
+    }))
+
+    const stmt = this.db.prepare(`
+      UPDATE blueprints
+      SET
+        name = ?,
+        group_path = ?,
+        entries_json = ?,
+        updated_at = ?
+      WHERE id = ?
+    `)
+
+    stmt.run(
+      next.name,
+      next.groupPath,
+      JSON.stringify(entries),
+      next.updatedAt.getTime(),
+      id
+    )
+
+    return {
+      ...next,
+      entries
+    }
+  }
+
+  deleteBlueprint(id: string): void {
+    const stmt = this.db.prepare("DELETE FROM blueprints WHERE id = ?")
     stmt.run(id)
   }
 

@@ -7,7 +7,7 @@ import { createSignal, createEffect, onCleanup, batch } from "solid-js"
 import { createStore, produce } from "solid-js/store"
 import { getStorage } from "@/core/storage"
 import { getSessionManager } from "@/core/session"
-import type { Session, Group, Profile, Config } from "@/core/types"
+import type { Session, Group, Profile, Blueprint, Config } from "@/core/types"
 import { createSimpleContext } from "./helper"
 
 export type SyncStatus = "loading" | "partial" | "complete"
@@ -20,11 +20,13 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       sessions: Session[]
       groups: Group[]
       profiles: Profile[]
+      blueprints: Blueprint[]
       config: Config
     }>({
       sessions: [],
       groups: [],
       profiles: [],
+      blueprints: [],
       config: {}
     })
 
@@ -37,11 +39,13 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       const sessions = storage.loadSessions()
       const groups = storage.loadGroups()
       const profiles = storage.listProfiles()
+      const blueprints = storage.listBlueprints()
 
       batch(() => {
         setStore("sessions", sessions)
         setStore("groups", groups)
         setStore("profiles", profiles)
+        setStore("blueprints", blueprints)
         if (status() === "loading") {
           setStatus("partial")
         }
@@ -131,6 +135,10 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         moveToGroup(id: string, groupPath: string): void {
           manager.moveToGroup(id, groupPath)
           refresh()
+        },
+        async send(id: string, message: string): Promise<void> {
+          await manager.sendMessage(id, message)
+          refresh()
         }
       },
       group: {
@@ -205,6 +213,33 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         },
         delete(id: string): void {
           storage.deleteProfile(id)
+          storage.touch()
+          refresh()
+        }
+      },
+      blueprint: {
+        get(id: string): Blueprint | undefined {
+          return store.blueprints.find((b) => b.id === id)
+        },
+        list(): Blueprint[] {
+          return store.blueprints
+        },
+        create(input: Omit<Blueprint, "id" | "createdAt" | "updatedAt">): Blueprint {
+          const blueprint = storage.createBlueprint(input)
+          storage.touch()
+          refresh()
+          return blueprint
+        },
+        update(id: string, updates: Partial<Omit<Blueprint, "id" | "createdAt" | "updatedAt">>): Blueprint | null {
+          const blueprint = storage.updateBlueprint(id, updates)
+          if (blueprint) {
+            storage.touch()
+            refresh()
+          }
+          return blueprint
+        },
+        delete(id: string): void {
+          storage.deleteBlueprint(id)
           storage.touch()
           refresh()
         }

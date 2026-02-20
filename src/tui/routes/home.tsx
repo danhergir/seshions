@@ -663,6 +663,7 @@ export function Home() {
       { key: "Enter", label: "attach" },
       { key: "r", label: "rename" },
       { key: "q", label: "detach" },
+      { key: "b", label: "blueprints" },
       { key: "Ctrl+K", label: "palette" }
     ]
 

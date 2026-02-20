@@ -58,6 +58,22 @@ export interface Profile {
   updatedAt: Date
 }
 
+export interface BlueprintEntry {
+  title: string
+  projectPath: string
+  tool: Tool
+  command: string
+}
+
+export interface Blueprint {
+  id: string
+  name: string
+  groupPath: string
+  entries: BlueprintEntry[]
+  createdAt: Date
+  updatedAt: Date
+}
+
 export interface StatusUpdate {
   sessionId: string
   status: SessionStatus
