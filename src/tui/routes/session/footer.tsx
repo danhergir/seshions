@@ -33,7 +33,7 @@ export function SessionFooter(props: { session: Session }) {
           <span style={{ fg: theme.text }}> rename</span>
         </text>
         <text>
-          <span style={{ fg: theme.textMuted }}>Ctrl+K</span>
+          <span style={{ fg: theme.textMuted }}>/</span>
           <span style={{ fg: theme.text }}> commands</span>
         </text>
         <text>

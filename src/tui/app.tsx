@@ -223,6 +223,7 @@ function App(props: { onExit: () => Promise<void> }) {
         category: "Session",
         keybind: "Ctrl+L",
         suggested: sync.data.sessions.length > 0,
+        contexts: ["home", "session"],
         onSelect: () => {
           dialog.replace(() => <DialogSessions />)
         }
@@ -233,6 +234,7 @@ function App(props: { onExit: () => Promise<void> }) {
         category: "Session",
         keybind: "N",
         suggested: true,
+        contexts: ["home", "session"],
         onSelect: () => {
           dialog.replace(() => <DialogNew />)
         }
@@ -242,6 +244,7 @@ function App(props: { onExit: () => Promise<void> }) {
         value: "session.profiles",
         category: "Session",
         keybind: "P",
+        contexts: ["home"],
         onSelect: () => {
           dialog.replace(() => <DialogProfileManager />)
         }
@@ -251,6 +254,7 @@ function App(props: { onExit: () => Promise<void> }) {
         value: "session.blueprints",
         category: "Session",
         keybind: "B",
+        contexts: ["home"],
         onSelect: () => {
           dialog.replace(() => <DialogBlueprintManager />)
         }
@@ -259,6 +263,7 @@ function App(props: { onExit: () => Promise<void> }) {
         title: "Dispatch to role",
         value: "orchestrate.dispatch",
         category: "Orchestration",
+        contexts: ["home", "session"],
         onSelect: () => {
           dialog.replace(() => <DialogDispatchRoleSelect />)
         }
@@ -267,6 +272,7 @@ function App(props: { onExit: () => Promise<void> }) {
         title: "Broadcast to group",
         value: "orchestrate.broadcast",
         category: "Orchestration",
+        contexts: ["home", "session"],
         onSelect: () => {
           dialog.replace(() => <DialogBroadcastGroupSelect />)
         }
@@ -275,6 +281,7 @@ function App(props: { onExit: () => Promise<void> }) {
         title: "Go home",
         value: "nav.home",
         category: "Navigation",
+        contexts: ["session"],
         onSelect: () => {
           route.navigate({ type: "home" })
           dialog.clear()
@@ -285,6 +292,7 @@ function App(props: { onExit: () => Promise<void> }) {
         value: "app.exit",
         category: "System",
         keybind: "Q",
+        contexts: ["home", "session"],
         onSelect: async () => {
           await props.onExit()
         }
@@ -297,7 +305,8 @@ function App(props: { onExit: () => Promise<void> }) {
 
     if (dialog.stack.length > 0) return
 
-    if (evt.ctrl && evt.name === "k") {
+    if (evt.name === "/") {
+      evt.preventDefault()
       command.open()
     }
 
@@ -327,7 +336,7 @@ function App(props: { onExit: () => Promise<void> }) {
     if (evt.name === "?") {
       toast.show({
         title: "Help",
-        message: "Ctrl+K: Action Hub | N: New | B: Blueprints | P: Profiles | Q: Quit",
+        message: "/: Action Hub | N: New | B: Blueprints | P: Profiles | Q: Quit",
         variant: "info",
         duration: 5000
       })

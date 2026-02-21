@@ -15,8 +15,7 @@ import { DialogRename } from "@tui/component/dialog-rename"
 import { DialogGroup } from "@tui/component/dialog-group"
 import { DialogMove } from "@tui/component/dialog-move"
 import { DialogProfileManager } from "@tui/component/dialog-profile"
-import { attachSessionSync, capturePane, wasCommandPaletteRequested } from "@/core/tmux"
-import { useCommandDialog } from "@tui/component/dialog-command"
+import { attachSessionSync, capturePane } from "@/core/tmux"
 import type { Session, Group } from "@/core/types"
 import { formatSmartTime, truncatePath } from "@tui/util/locale"
 import { STATUS_ICONS } from "@tui/util/status"
@@ -74,7 +73,6 @@ export function Home() {
   const dialog = useDialog()
   const toast = useToast()
   const renderer = useRenderer()
-  const command = useCommandDialog()
 
   const [selectedIndex, setSelectedIndex] = createSignal(0)
   const [previewContent, setPreviewContent] = createSignal<string>("")
@@ -242,11 +240,6 @@ export function Home() {
     }
     renderer.resume()
     sync.refresh()
-
-    // Check if user pressed Ctrl+K to open command palette
-    if (wasCommandPaletteRequested()) {
-      command.open()
-    }
   }
 
   async function executeDeleteSession(session: Session) {
@@ -445,15 +438,37 @@ export function Home() {
   function SessionItem(props: { session: Session; index: number; indented?: boolean }) {
     const isSelected = createMemo(() => props.index === selectedIndex())
     const statusColor = createMemo(() => {
+      if (!isSelected()) {
+        switch (props.session.status) {
+          case "running": return theme.success
+          case "waiting": return theme.warning
+          case "error": return theme.error
+          default: return theme.textMuted
+        }
+      }
+
       switch (props.session.status) {
         case "running": return theme.success
-        case "waiting": return theme.warning
+        case "waiting": return theme.info
         case "error": return theme.error
+        case "idle": return theme.textMuted
+        case "stopped": return theme.textMuted
         default: return theme.textMuted
       }
     })
+    const statusTag = createMemo(() => {
+      switch (props.session.status) {
+        case "running": return "RUN"
+        case "waiting": return "WAIT"
+        case "error": return "ERR"
+        case "stopped": return "STOP"
+        case "idle":
+        default:
+          return "IDLE"
+      }
+    })
 
-    const maxTitleLen = useDualColumn() ? 15 : 20
+    const maxTitleLen = useDualColumn() ? 18 : 24
     const title = props.session.title.length > maxTitleLen
       ? props.session.title.slice(0, maxTitleLen - 2) + ".."
       : props.session.title
@@ -469,12 +484,7 @@ export function Home() {
         height={1}
         backgroundColor={isSelected() ? theme.primary : undefined}
       >
-        <text fg={isSelected() ? theme.selectedListItemText : statusColor()}>▌</text>
-        <text> </text>
-        {/* Status icon */}
-        <text fg={isSelected() ? theme.selectedListItemText : statusColor()}>
-          {STATUS_ICONS[props.session.status]}
-        </text>
+        <text fg={statusColor()}>▌</text>
         <text> </text>
 
         {/* Title */}
@@ -495,6 +505,11 @@ export function Home() {
           </text>
           <text> </text>
         </Show>
+
+        <text fg={statusColor()} attributes={TextAttributes.BOLD}>
+          {statusTag()}
+        </text>
+        <text> </text>
 
         {/* Time */}
         <text fg={isSelected() ? theme.selectedListItemText : theme.textMuted}>
@@ -662,9 +677,9 @@ export function Home() {
       { key: "↑↓", label: "scan" },
       { key: "Enter", label: "attach" },
       { key: "r", label: "rename" },
-      { key: "q", label: "detach" },
+      { key: "q", label: "quit" },
       { key: "b", label: "blueprints" },
-      { key: "Ctrl+K", label: "palette" }
+      { key: "/", label: "palette" }
     ]
 
     const item = selectedItem()
@@ -696,7 +711,7 @@ export function Home() {
         <text fg={theme.primary} attributes={TextAttributes.BOLD}>
           SESHIONS
         </text>
-        <text fg={theme.textMuted}>CTRL+K ACTION HUB</text>
+        <text fg={theme.textMuted}>/ ACTION HUB</text>
       </box>
 
       {/* Header summary */}

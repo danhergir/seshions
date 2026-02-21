@@ -3,8 +3,8 @@
  * Dispatch a prompt to one role or broadcast to a group.
  */
 
-import { createMemo, createSignal } from "solid-js"
-import { TextAttributes, InputRenderable } from "@opentui/core"
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js"
+import { TextAttributes, TextareaRenderable } from "@opentui/core"
 import { useKeyboard } from "@opentui/solid"
 import { useTheme } from "@tui/context/theme"
 import { useDialog } from "@tui/ui/dialog"
@@ -37,7 +37,24 @@ function DialogCompose(props: DialogComposeProps) {
 
   const [message, setMessage] = createSignal("")
   const [sending, setSending] = createSignal(false)
-  let inputRef: InputRenderable | undefined
+  const [confirmBroadcastArmed, setConfirmBroadcastArmed] = createSignal(false)
+  let textareaRef: TextareaRenderable | undefined
+  const textareaProps: any = {
+    initialValue: message(),
+    onContentChange: setMessage,
+    wrapMode: "word",
+    minHeight: 4,
+    maxHeight: 8,
+    scrollMargin: 1,
+    placeholder: "Write prompt... (Enter for newline)",
+    focusedBackgroundColor: theme.backgroundElement,
+    cursorColor: theme.primary,
+    focusedTextColor: theme.text,
+    ref: (r: TextareaRenderable) => {
+      textareaRef = r
+      setTimeout(() => textareaRef?.focus(), 1)
+    }
+  }
 
   const targetSession = createMemo(() =>
     props.sessionId ? sync.session.get(props.sessionId) : undefined
@@ -61,6 +78,14 @@ function DialogCompose(props: DialogComposeProps) {
       return targetSession()?.title ?? "unknown session"
     }
     return props.groupPath ?? "unknown group"
+  })
+  const targetPreview = createMemo(() => targets().slice(0, 8))
+
+  createEffect(() => {
+    message()
+    if (confirmBroadcastArmed()) {
+      setConfirmBroadcastArmed(false)
+    }
   })
 
   async function submit() {
@@ -113,6 +138,7 @@ function DialogCompose(props: DialogComposeProps) {
     }
 
     setSending(false)
+    setConfirmBroadcastArmed(false)
     if (sent > 0) {
       dialog.clear()
     }
@@ -121,12 +147,20 @@ function DialogCompose(props: DialogComposeProps) {
   useKeyboard((evt) => {
     if (evt.name === "escape") {
       evt.preventDefault()
+      if (props.mode === "broadcast" && confirmBroadcastArmed()) {
+        setConfirmBroadcastArmed(false)
+        return
+      }
       props.onBack()
       return
     }
 
-    if (evt.name === "return" && !evt.shift) {
+    if (evt.ctrl && evt.name === "return") {
       evt.preventDefault()
+      if (props.mode === "broadcast" && !confirmBroadcastArmed()) {
+        setConfirmBroadcastArmed(true)
+        return
+      }
       void submit()
     }
   })
@@ -150,21 +184,23 @@ function DialogCompose(props: DialogComposeProps) {
         <text fg={theme.textMuted}>
           {plural(targets().length, "active session")}
         </text>
+        <Show when={props.mode === "broadcast"}>
+          <box flexDirection="column" gap={0}>
+            <For each={targetPreview()}>
+              {(target) => (
+                <text fg={theme.textMuted}>• {target.title}</text>
+              )}
+            </For>
+            <Show when={targets().length > 8}>
+              <text fg={theme.textMuted}>… and {targets().length - 8} more</text>
+            </Show>
+          </box>
+        </Show>
       </box>
 
       <box paddingLeft={4} paddingRight={4} paddingTop={1} gap={1}>
         <text fg={theme.primary}>Message</text>
-        <input
-          value={message()}
-          onInput={setMessage}
-          focusedBackgroundColor={theme.backgroundElement}
-          cursorColor={theme.primary}
-          focusedTextColor={theme.text}
-          ref={(r) => {
-            inputRef = r
-            setTimeout(() => inputRef?.focus(), 1)
-          }}
-        />
+        <textarea {...textareaProps} />
       </box>
 
       <box paddingLeft={4} paddingRight={4} paddingTop={2}>
@@ -180,7 +216,17 @@ function DialogCompose(props: DialogComposeProps) {
       </box>
 
       <box paddingLeft={4} paddingRight={4} paddingTop={1}>
-        <text fg={theme.textMuted}>Enter: send | Esc: back</text>
+        <Show
+          when={props.mode === "broadcast"}
+          fallback={<text fg={theme.textMuted}>Ctrl+Enter: send | Enter: newline | Esc: back</text>}
+        >
+          <Show
+            when={confirmBroadcastArmed()}
+            fallback={<text fg={theme.warning}>Ctrl+Enter again to confirm broadcast | Esc: cancel confirm</text>}
+          >
+            <text fg={theme.warning}>Press Ctrl+Enter now to send to {plural(targets().length, "session")}</text>
+          </Show>
+        </Show>
       </box>
     </box>
   )

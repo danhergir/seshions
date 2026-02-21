@@ -14,8 +14,8 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 
 ## Keyboard UX
 
-- Footer is contextual: it always shows core keys (`Enter`, `r`, `q`, `Ctrl+K`) and adapts extra hints based on what is selected.
-- `Ctrl+K` opens the Action Hub (command palette) for advanced actions.
+- Footer is contextual: it always shows core keys (`Enter`, `r`, `q`, `/`) and adapts extra hints based on what is selected.
+- `/` opens the Action Hub (command palette) for advanced actions.
 - Action Hub includes orchestration commands: `Dispatch to role` and `Broadcast to group`.
 - Pressing `d` opens a confirmation dialog before deleting a session or group.
 - Press `b` to open Launch Blueprints.
@@ -54,7 +54,7 @@ The npm launcher downloads the matching native runtime automatically and caches 
 Create and launch a reusable multi-session template:
 
 1. Open `seshions`
-2. Press `b` (or `Ctrl+K` -> `Launch blueprints`)
+2. Press `b` (or `/` -> `Launch blueprints`)
 3. Create blueprint:
    - Name
    - Group path
@@ -66,9 +66,11 @@ Create and launch a reusable multi-session template:
 
 ## Orchestration (From One Controller Session)
 
-1. Open Action Hub with `Ctrl+K`
+1. Open Action Hub with `/`
 2. Choose `Dispatch to role` to send one prompt to a single target session
 3. Or choose `Broadcast to group` to send one prompt to every active session in that group
+4. Composer supports multi-line prompts (`Enter` adds newline, `Ctrl+Enter` sends)
+5. Broadcast requires an explicit second `Ctrl+Enter` confirmation before sending
 
 ## Local Development
 

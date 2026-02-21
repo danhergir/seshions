@@ -27,7 +27,7 @@ Keyboard Shortcuts (in TUI):
   r              Rename selected session/group
   d              Delete selected (with confirmation)
   q              Detach / Back
-  Ctrl+K         Action Hub
+  /              Action Hub
                 (includes Dispatch to role / Broadcast to group)
   n              Launch session
   g              Create group

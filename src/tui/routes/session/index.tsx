@@ -102,7 +102,8 @@ export function Session() {
     if (evt.name === "l" && evt.ctrl) {
       dialog.replace(() => <DialogSessions />)
     }
-    if (evt.name === "k" && evt.ctrl) {
+    if (evt.name === "/") {
+      evt.preventDefault()
       command.open()
     }
     if (evt.name === "escape") {

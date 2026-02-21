@@ -74,6 +74,12 @@ export interface Blueprint {
   updatedAt: Date
 }
 
+export interface CommandUsage {
+  commandId: string
+  useCount: number
+  lastUsedAt: Date
+}
+
 export interface StatusUpdate {
   sessionId: string
   status: SessionStatus

@@ -13,13 +13,14 @@ import type {
   Profile,
   Blueprint,
   BlueprintEntry,
+  CommandUsage,
   StatusUpdate,
   Tool,
   SessionStatus
 } from "./types"
 import { getStateDbPath } from "./app-paths"
 
-const SCHEMA_VERSION = 3
+const SCHEMA_VERSION = 4
 
 export interface StorageOptions {
   dbPath?: string
@@ -124,6 +125,14 @@ export class Storage {
         started INTEGER NOT NULL,
         heartbeat INTEGER NOT NULL,
         is_primary INTEGER NOT NULL DEFAULT 0
+      )
+    `)
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS command_usage (
+        command_id TEXT PRIMARY KEY,
+        use_count INTEGER NOT NULL DEFAULT 0,
+        last_used_at INTEGER NOT NULL DEFAULT 0
       )
     `)
 
@@ -693,6 +702,60 @@ export class Storage {
   deleteBlueprint(id: string): void {
     const stmt = this.db.prepare("DELETE FROM blueprints WHERE id = ?")
     stmt.run(id)
+  }
+
+  // Command usage
+
+  listCommandUsage(): CommandUsage[] {
+    if (this.closed) return []
+    const stmt = this.db.prepare(`
+      SELECT command_id, use_count, last_used_at
+      FROM command_usage
+      ORDER BY last_used_at DESC, use_count DESC
+    `)
+
+    const rows = stmt.all() as Array<{ command_id: string; use_count: number; last_used_at: number }>
+    return rows.map((row) => ({
+      commandId: row.command_id,
+      useCount: row.use_count,
+      lastUsedAt: new Date(row.last_used_at)
+    }))
+  }
+
+  touchCommandUsage(commandId: string): CommandUsage {
+    const now = Date.now()
+    const upsert = this.db.prepare(`
+      INSERT INTO command_usage (command_id, use_count, last_used_at)
+      VALUES (?, 1, ?)
+      ON CONFLICT(command_id)
+      DO UPDATE SET
+        use_count = command_usage.use_count + 1,
+        last_used_at = excluded.last_used_at
+    `)
+    upsert.run(commandId, now)
+
+    // Keep table bounded to recent commands to avoid unbounded growth.
+    this.db.prepare(`
+      DELETE FROM command_usage
+      WHERE command_id NOT IN (
+        SELECT command_id
+        FROM command_usage
+        ORDER BY last_used_at DESC
+        LIMIT 200
+      )
+    `).run()
+
+    const row = this.db.prepare(`
+      SELECT command_id, use_count, last_used_at
+      FROM command_usage
+      WHERE command_id = ?
+    `).get(commandId) as { command_id: string; use_count: number; last_used_at: number }
+
+    return {
+      commandId: row.command_id,
+      useCount: row.use_count,
+      lastUsedAt: new Date(row.last_used_at)
+    }
   }
 
   // Heartbeat management
