@@ -4,10 +4,11 @@
  */
 
 import { createSignal, createEffect, onCleanup, batch } from "solid-js"
-import { createStore, produce } from "solid-js/store"
+import { createStore } from "solid-js/store"
 import { getStorage } from "@/core/storage"
 import { getSessionManager } from "@/core/session"
-import type { Session, Group, Profile, Blueprint, Config } from "@/core/types"
+import { buildClaudeTeamRuntime } from "@/core/claude-teams"
+import type { Session, Group, Profile, Blueprint, Config, ClaudeTeamRuntime } from "@/core/types"
 import { createSimpleContext } from "./helper"
 
 export type SyncStatus = "loading" | "partial" | "complete"
@@ -21,18 +22,22 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       groups: Group[]
       profiles: Profile[]
       blueprints: Blueprint[]
+      claudeTeamRuntime: ClaudeTeamRuntime[]
       config: Config
     }>({
       sessions: [],
       groups: [],
       profiles: [],
       blueprints: [],
+      claudeTeamRuntime: [],
       config: {}
     })
 
     // Initial load
     const storage = getStorage()
     const manager = getSessionManager()
+    let lastClaudeRuntimeAt = 0
+    let cachedClaudeRuntime: ClaudeTeamRuntime[] = []
 
     // Load sessions and groups
     function refresh() {
@@ -40,12 +45,18 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
       const groups = storage.loadGroups()
       const profiles = storage.listProfiles()
       const blueprints = storage.listBlueprints()
+      const now = Date.now()
+      if (now - lastClaudeRuntimeAt >= 2000) {
+        cachedClaudeRuntime = buildClaudeTeamRuntime(sessions)
+        lastClaudeRuntimeAt = now
+      }
 
       batch(() => {
         setStore("sessions", sessions)
         setStore("groups", groups)
         setStore("profiles", profiles)
         setStore("blueprints", blueprints)
+        setStore("claudeTeamRuntime", cachedClaudeRuntime)
         if (status() === "loading") {
           setStatus("partial")
         }
@@ -242,6 +253,11 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           storage.deleteBlueprint(id)
           storage.touch()
           refresh()
+        }
+      },
+      claudeTeams: {
+        listRuntime(): ClaudeTeamRuntime[] {
+          return store.claudeTeamRuntime
         }
       },
       refresh

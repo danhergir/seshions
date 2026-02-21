@@ -9,6 +9,7 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 - Dispatch prompts to a single role or broadcast to all sessions in a group
 - Attach/detach quickly with keyboard-first controls
 - Group sessions by workflow
+- Auto-discover Claude team members from local Claude metadata and surface them in the roster
 - Optional git worktree isolation per session
 - Persist session state across restarts via tmux
 
@@ -71,6 +72,21 @@ Create and launch a reusable multi-session template:
 3. Or choose `Broadcast to group` to send one prompt to every active session in that group
 4. Composer supports multi-line prompts (`Enter` adds newline, `Ctrl+Enter` sends)
 5. Broadcast requires an explicit second `Ctrl+Enter` confirmation before sending
+
+## Claude Team Auto-Discovery
+
+When Claude team metadata exists, `seshions` adds a `Claude Teams` section in the roster and keeps it updated automatically.
+
+- Reads teams from `~/.claude/teams/*/config.json`
+- Reads task state from `~/.claude/tasks/<team-name>/`
+- Maps teammates to active Claude sessions when possible and shows link confidence (`linked`, `probable`, `no-pane`)
+- Shows per-team task counters (`P`, `IP`, `C`) and teammate runtime status in the roster
+
+Optional override for testing/custom setups:
+
+```bash
+export SESHIONS_CLAUDE_HOME=/path/to/claude-root
+```
 
 ## Local Development
 

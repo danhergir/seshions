@@ -16,10 +16,9 @@ import { DialogGroup } from "@tui/component/dialog-group"
 import { DialogMove } from "@tui/component/dialog-move"
 import { DialogProfileManager } from "@tui/component/dialog-profile"
 import { attachSessionSync, capturePane } from "@/core/tmux"
-import type { Session, Group } from "@/core/types"
+import type { Session, Group, ClaudeMemberRuntime, ClaudeTeamRuntime, SessionStatus } from "@/core/types"
 import { formatSmartTime, truncatePath } from "@tui/util/locale"
 import { STATUS_ICONS } from "@tui/util/status"
-import { sortSessionsByCreatedAt } from "@tui/util/session"
 import {
   flattenGroupTree,
   ensureDefaultGroup,
@@ -66,6 +65,24 @@ interface DeleteConfirmDialogProps {
   onConfirm: () => Promise<void>
 }
 
+interface ClaudeRootRosterItem {
+  type: "claude-root"
+  teamCount: number
+}
+
+interface ClaudeTeamRosterItem {
+  type: "claude-team"
+  runtime: ClaudeTeamRuntime
+}
+
+interface ClaudeMemberRosterItem {
+  type: "claude-member"
+  runtime: ClaudeTeamRuntime
+  member: ClaudeMemberRuntime
+}
+
+type RosterItem = GroupedItem | ClaudeRootRosterItem | ClaudeTeamRosterItem | ClaudeMemberRosterItem
+
 export function Home() {
   const dimensions = useTerminalDimensions()
   const { theme } = useTheme()
@@ -106,6 +123,7 @@ export function Home() {
 
   // Get all sessions
   const allSessions = createMemo(() => sync.session.list())
+  const claudeTeamsRuntime = createMemo(() => sync.claudeTeams.listRuntime())
 
   // Get grouped items (groups + sessions flattened)
   const groupedItems = createMemo(() => {
@@ -113,21 +131,71 @@ export function Home() {
     return flattenGroupTree(allSessions(), groups)
   })
 
+  const rosterItems = createMemo<RosterItem[]>(() => {
+    const items: RosterItem[] = [...groupedItems()]
+    const runtimes = claudeTeamsRuntime()
+    if (runtimes.length === 0) {
+      return items
+    }
+
+    items.push({
+      type: "claude-root",
+      teamCount: runtimes.length
+    })
+
+    for (const runtime of runtimes) {
+      items.push({
+        type: "claude-team",
+        runtime
+      })
+      for (const member of runtime.members) {
+        items.push({
+          type: "claude-member",
+          runtime,
+          member
+        })
+      }
+    }
+
+    return items
+  })
+
   // Keep selection in bounds
   createEffect(() => {
-    const len = groupedItems().length
+    const len = rosterItems().length
     if (selectedIndex() >= len && len > 0) {
       setSelectedIndex(len - 1)
     }
   })
 
   // Get the selected item (could be group or session)
-  const selectedItem = createMemo(() => groupedItems()[selectedIndex()])
+  const selectedItem = createMemo<RosterItem | undefined>(() => rosterItems()[selectedIndex()])
 
-  // Get the selected session (only if a session is selected)
+  // Get the selected session (if selected item can map to a session)
   const selectedSession = createMemo(() => {
     const item = selectedItem()
-    return item?.type === "session" ? item.session : undefined
+    if (!item) return undefined
+    if (item.type === "session") return item.session
+    if (item.type === "claude-member" && item.member.sessionId) {
+      return sync.session.get(item.member.sessionId)
+    }
+    return undefined
+  })
+
+  const selectedClaudeTeam = createMemo<ClaudeTeamRuntime | undefined>(() => {
+    const item = selectedItem()
+    if (!item) return undefined
+    if (item.type === "claude-team") return item.runtime
+    if (item.type === "claude-member") return item.runtime
+    return undefined
+  })
+
+  const selectedClaudeMember = createMemo<ClaudeMemberRuntime | undefined>(() => {
+    const item = selectedItem()
+    if (item?.type === "claude-member") {
+      return item.member
+    }
+    return undefined
   })
 
   // Fetch preview with debounce; keep showing previous content while loading
@@ -194,7 +262,7 @@ export function Home() {
   })
 
   function move(delta: number) {
-    const len = groupedItems().length
+    const len = rosterItems().length
     if (len === 0) return
     let next = selectedIndex() + delta
     if (next < 0) next = len - 1
@@ -319,21 +387,21 @@ export function Home() {
       setSelectedIndex(0)
     }
     if (evt.name === "end") {
-      setSelectedIndex(Math.max(0, groupedItems().length - 1))
+      setSelectedIndex(Math.max(0, rosterItems().length - 1))
     }
 
     // Enter: attach to session
     if (evt.name === "return") {
-      const item = selectedItem()
-      if (item?.type === "session" && item.session) {
-        handleAttach(item.session)
+      const session = selectedSession()
+      if (session) {
+        handleAttach(session)
       }
     }
 
     // d to delete session OR group
     if (evt.name === "d") {
       const item = selectedItem()
-      if (item) {
+      if (item && (item.type === "session" || item.type === "group")) {
         openDeleteConfirm(item)
       }
     }
@@ -380,6 +448,36 @@ export function Home() {
     }
     return lines
   })
+
+  function statusColor(status: SessionStatus, isSelected: boolean) {
+    if (isSelected) {
+      switch (status) {
+        case "running": return theme.success
+        case "waiting": return theme.info
+        case "error": return theme.error
+        default: return theme.textMuted
+      }
+    }
+
+    switch (status) {
+      case "running": return theme.success
+      case "waiting": return theme.warning
+      case "error": return theme.error
+      default: return theme.textMuted
+    }
+  }
+
+  function statusTag(status: SessionStatus): string {
+    switch (status) {
+      case "running": return "RUN"
+      case "waiting": return "WAIT"
+      case "error": return "ERR"
+      case "stopped": return "STOP"
+      case "idle":
+      default:
+        return "IDLE"
+    }
+  }
 
   // Render group header
   function GroupHeader(props: { group: Group; index: number }) {
@@ -437,36 +535,8 @@ export function Home() {
   // Render session list item (indented under group)
   function SessionItem(props: { session: Session; index: number; indented?: boolean }) {
     const isSelected = createMemo(() => props.index === selectedIndex())
-    const statusColor = createMemo(() => {
-      if (!isSelected()) {
-        switch (props.session.status) {
-          case "running": return theme.success
-          case "waiting": return theme.warning
-          case "error": return theme.error
-          default: return theme.textMuted
-        }
-      }
-
-      switch (props.session.status) {
-        case "running": return theme.success
-        case "waiting": return theme.info
-        case "error": return theme.error
-        case "idle": return theme.textMuted
-        case "stopped": return theme.textMuted
-        default: return theme.textMuted
-      }
-    })
-    const statusTag = createMemo(() => {
-      switch (props.session.status) {
-        case "running": return "RUN"
-        case "waiting": return "WAIT"
-        case "error": return "ERR"
-        case "stopped": return "STOP"
-        case "idle":
-        default:
-          return "IDLE"
-      }
-    })
+    const color = createMemo(() => statusColor(props.session.status, isSelected()))
+    const tag = createMemo(() => statusTag(props.session.status))
 
     const maxTitleLen = useDualColumn() ? 18 : 24
     const title = props.session.title.length > maxTitleLen
@@ -484,7 +554,7 @@ export function Home() {
         height={1}
         backgroundColor={isSelected() ? theme.primary : undefined}
       >
-        <text fg={statusColor()}>▌</text>
+        <text fg={color()}>▌</text>
         <text> </text>
 
         {/* Title */}
@@ -506,8 +576,8 @@ export function Home() {
           <text> </text>
         </Show>
 
-        <text fg={statusColor()} attributes={TextAttributes.BOLD}>
-          {statusTag()}
+        <text fg={color()} attributes={TextAttributes.BOLD}>
+          {tag()}
         </text>
         <text> </text>
 
@@ -515,6 +585,131 @@ export function Home() {
         <text fg={isSelected() ? theme.selectedListItemText : theme.textMuted}>
           {formatSmartTime(props.session.lastAccessed)}
         </text>
+      </box>
+    )
+  }
+
+  function ClaudeRootHeader(props: { index: number; teamCount: number }) {
+    const isSelected = createMemo(() => props.index === selectedIndex())
+    return (
+      <box
+        flexDirection="row"
+        paddingLeft={1}
+        paddingRight={1}
+        height={1}
+        backgroundColor={isSelected() ? theme.primary : theme.backgroundElement}
+      >
+        <text fg={isSelected() ? theme.selectedListItemText : theme.primary}>▌</text>
+        <text> </text>
+        <text fg={isSelected() ? theme.selectedListItemText : theme.secondary}>◈</text>
+        <text> </text>
+        <text fg={isSelected() ? theme.selectedListItemText : theme.text} attributes={TextAttributes.BOLD}>
+          Claude Teams
+        </text>
+        <text flexGrow={1}> </text>
+        <text fg={isSelected() ? theme.selectedListItemText : theme.textMuted}>
+          ({props.teamCount})
+        </text>
+      </box>
+    )
+  }
+
+  function ClaudeTeamItem(props: { runtime: ClaudeTeamRuntime; index: number }) {
+    const isSelected = createMemo(() => props.index === selectedIndex())
+    const status: SessionStatus = props.runtime.inProgressCount > 0
+      ? "running"
+      : props.runtime.pendingCount > 0
+        ? "waiting"
+        : props.runtime.failedCount > 0
+          ? "error"
+          : "idle"
+    const color = createMemo(() => statusColor(status, isSelected()))
+
+    return (
+      <box
+        flexDirection="row"
+        paddingLeft={3}
+        paddingRight={1}
+        height={1}
+        backgroundColor={isSelected() ? theme.primary : undefined}
+      >
+        <text fg={color()}>▌</text>
+        <text> </text>
+        <text fg={isSelected() ? theme.selectedListItemText : theme.secondary}>◎</text>
+        <text> </text>
+        <text
+          fg={isSelected() ? theme.selectedListItemText : theme.text}
+          attributes={isSelected() ? TextAttributes.BOLD : undefined}
+        >
+          {props.runtime.team.name}
+        </text>
+
+        <text flexGrow={1}> </text>
+
+        <text fg={isSelected() ? theme.selectedListItemText : theme.info}>
+          P{props.runtime.pendingCount}
+        </text>
+        <text> </text>
+        <text fg={isSelected() ? theme.selectedListItemText : theme.success}>
+          IP{props.runtime.inProgressCount}
+        </text>
+        <text> </text>
+        <text fg={isSelected() ? theme.selectedListItemText : theme.textMuted}>
+          C{props.runtime.completedCount}
+        </text>
+      </box>
+    )
+  }
+
+  function ClaudeMemberItem(props: { runtime: ClaudeTeamRuntime; member: ClaudeMemberRuntime; index: number }) {
+    const isSelected = createMemo(() => props.index === selectedIndex())
+    const color = createMemo(() => statusColor(props.member.status, isSelected()))
+    const linkTag = createMemo(() => {
+      if (!props.member.linked) return "no-pane"
+      if (props.member.linkConfidence === "exact_agent_id") return "linked"
+      if (props.member.linkConfidence === "name_match") return "probable"
+      return "linked"
+    })
+    const linkColor = createMemo(() => {
+      if (!props.member.linked) return theme.textMuted
+      if (props.member.linkConfidence === "exact_agent_id") return theme.success
+      if (props.member.linkConfidence === "name_match") return theme.warning
+      return theme.textMuted
+    })
+    const badge = createMemo(() => {
+      if (props.member.isLead) return "LEAD"
+      if (props.member.member.role) return props.member.member.role.slice(0, 6).toUpperCase()
+      return "MATE"
+    })
+
+    return (
+      <box
+        flexDirection="row"
+        paddingLeft={5}
+        paddingRight={1}
+        height={1}
+        backgroundColor={isSelected() ? theme.primary : undefined}
+      >
+        <text fg={color()}>▌</text>
+        <text> </text>
+        <text fg={isSelected() ? theme.selectedListItemText : theme.textMuted}>◦</text>
+        <text> </text>
+
+        <text
+          fg={isSelected() ? theme.selectedListItemText : theme.text}
+          attributes={isSelected() ? TextAttributes.BOLD : undefined}
+        >
+          {props.member.member.name}
+        </text>
+
+        <text> </text>
+        <text fg={isSelected() ? theme.selectedListItemText : theme.textMuted}>{badge()}</text>
+
+        <text flexGrow={1}> </text>
+
+        <text fg={linkColor()}>{linkTag()}</text>
+        <text> </text>
+        <text fg={color()} attributes={TextAttributes.BOLD}>{statusTag(props.member.status)}</text>
       </box>
     )
   }
@@ -581,6 +776,97 @@ export function Home() {
         <box height={1}>
           <text fg={theme.border}>{"─".repeat(rightWidth() - 2)}</text>
         </box>
+      </box>
+    )
+  }
+
+  function TeamSummaryPreview(props: { runtime: ClaudeTeamRuntime }) {
+    return (
+      <box flexDirection="column" paddingLeft={2} paddingTop={1} gap={1}>
+        <text fg={theme.text} attributes={TextAttributes.BOLD}>
+          {props.runtime.team.name}
+        </text>
+        <text fg={theme.textMuted}>
+          {props.runtime.members.length} teammates • {props.runtime.activeCount} active
+        </text>
+        <box flexDirection="row" gap={2}>
+          <text fg={theme.warning}>PENDING {props.runtime.pendingCount}</text>
+          <text fg={theme.success}>IN PROGRESS {props.runtime.inProgressCount}</text>
+          <text fg={theme.textMuted}>COMPLETED {props.runtime.completedCount}</text>
+          <Show when={props.runtime.failedCount > 0}>
+            <text fg={theme.error}>FAILED {props.runtime.failedCount}</text>
+          </Show>
+        </box>
+        <box height={1}>
+          <text fg={theme.border}>{"─".repeat(Math.max(12, rightWidth() - 4))}</text>
+        </box>
+        <Show
+          when={props.runtime.tasks.length > 0}
+          fallback={<text fg={theme.textMuted}>No task metadata detected yet.</text>}
+        >
+          <text fg={theme.primary}>Recent Tasks</text>
+          <For each={props.runtime.tasks.slice(0, 8)}>
+            {(task) => (
+              <box flexDirection="row">
+                <text fg={theme.textMuted}>• </text>
+                <text fg={theme.text}>{task.title}</text>
+                <text> </text>
+                <text fg={theme.textMuted}>
+                  [{task.assigneeName || task.assigneeId || "unassigned"}]
+                </text>
+              </box>
+            )}
+          </For>
+        </Show>
+      </box>
+    )
+  }
+
+  function ClaudeMemberFallbackPreview(props: { runtime: ClaudeTeamRuntime; member: ClaudeMemberRuntime }) {
+    const linkLabel = props.member.linked
+      ? props.member.linkConfidence === "exact_agent_id"
+        ? "linked"
+        : "probable link"
+      : "no pane linked"
+
+    const linkColor = props.member.linked
+      ? props.member.linkConfidence === "exact_agent_id"
+        ? theme.success
+        : theme.warning
+      : theme.textMuted
+
+    return (
+      <box flexDirection="column" paddingLeft={2} paddingTop={1} gap={1}>
+        <text fg={theme.text} attributes={TextAttributes.BOLD}>
+          {props.member.member.name}
+        </text>
+        <text fg={theme.textMuted}>{props.runtime.team.name}</text>
+        <box flexDirection="row" gap={2}>
+          <text fg={linkColor}>{linkLabel}</text>
+          <text fg={theme.textMuted}>role {props.member.member.role}</text>
+          <Show when={props.member.stale}>
+            <text fg={theme.warning}>stale</text>
+          </Show>
+        </box>
+        <box flexDirection="row" gap={2}>
+          <text fg={theme.warning}>P {props.member.pendingCount}</text>
+          <text fg={theme.success}>IP {props.member.inProgressCount}</text>
+          <text fg={theme.textMuted}>C {props.member.completedCount}</text>
+          <Show when={props.member.failedCount > 0}>
+            <text fg={theme.error}>F {props.member.failedCount}</text>
+          </Show>
+        </box>
+        <Show when={props.member.lastTaskAt}>
+          <text fg={theme.textMuted}>
+            Last task {props.member.lastTaskAt ? formatSmartTime(props.member.lastTaskAt) : ""}
+          </text>
+        </Show>
+        <Show
+          when={!props.member.linked}
+          fallback={<text fg={theme.textMuted}>Press Enter to attach this teammate pane.</text>}
+        >
+          <text fg={theme.textMuted}>No tmux pane mapped yet for this teammate.</text>
+        </Show>
       </box>
     )
   }
@@ -675,7 +961,6 @@ export function Home() {
   const footerHints = createMemo<FooterHint[]>(() => {
     const base: FooterHint[] = [
       { key: "↑↓", label: "scan" },
-      { key: "Enter", label: "attach" },
       { key: "r", label: "rename" },
       { key: "q", label: "quit" },
       { key: "b", label: "blueprints" },
@@ -684,12 +969,28 @@ export function Home() {
 
     const item = selectedItem()
     if (item?.type === "session") {
-      return [...base, { key: "d", label: "drop" }, { key: "m", label: "move" }]
+      return [{ key: "Enter", label: "attach" }, ...base, { key: "d", label: "drop" }, { key: "m", label: "move" }]
     }
     if (item?.type === "group") {
       return [...base, { key: "d", label: "drop-group" }, { key: "g", label: "new-group" }]
     }
+    if (item?.type === "claude-member") {
+      if (item.member.linked) {
+        return [{ key: "Enter", label: "attach" }, ...base]
+      }
+      return [...base]
+    }
+    if (item?.type === "claude-team") {
+      return [...base]
+    }
     return [...base, { key: "n", label: "launch" }, { key: "g", label: "group" }]
+  })
+
+  const rightPanelTitle = createMemo(() => {
+    if (selectedSession()) return "LIVE FEED"
+    if (selectedClaudeMember()) return "TEAMMATE"
+    if (selectedClaudeTeam()) return "TEAM BOARD"
+    return "LIVE FEED"
   })
 
   return (
@@ -734,7 +1035,7 @@ export function Home() {
 
       {/* Main content area */}
       <Show
-        when={allSessions().length > 0}
+        when={allSessions().length > 0 || claudeTeamsRuntime().length > 0}
         fallback={<EmptyState />}
       >
         <box flexDirection="row" flexGrow={1}>
@@ -758,21 +1059,31 @@ export function Home() {
               scrollbarOptions={{ visible: true }}
               ref={(r: ScrollBoxRenderable) => { scrollRef = r }}
             >
-              <For each={groupedItems()}>
-                {(item, index) => (
-                  <Show
-                    when={item.type === "group"}
-                    fallback={
+              <For each={rosterItems()}>
+                {(item, index) => {
+                  if (item.type === "group") {
+                    return <GroupHeader group={item.group!} index={index()} />
+                  }
+                  if (item.type === "session") {
+                    return (
                       <SessionItem
                         session={item.session!}
                         index={index()}
                         indented={true}
                       />
-                    }
-                  >
-                    <GroupHeader group={item.group!} index={index()} />
-                  </Show>
-                )}
+                    )
+                  }
+                  if (item.type === "claude-root") {
+                    return <ClaudeRootHeader index={index()} teamCount={item.teamCount} />
+                  }
+                  if (item.type === "claude-team") {
+                    return <ClaudeTeamItem runtime={item.runtime} index={index()} />
+                  }
+                  if (item.type === "claude-member") {
+                    return <ClaudeMemberItem runtime={item.runtime} member={item.member} index={index()} />
+                  }
+                  return null
+                }}
               </For>
             </scrollbox>
           </box>
@@ -795,14 +1106,30 @@ export function Home() {
               backgroundColor={theme.backgroundElement}
             >
               <text fg={theme.textMuted} attributes={TextAttributes.BOLD}>
-                LIVE FEED
+                {rightPanelTitle()}
               </text>
             </box>
 
               {/* Preview content */}
               <Show
                 when={selectedSession()}
-                fallback={<PreviewLogo />}
+                fallback={
+                  <Show
+                    when={selectedClaudeMember()}
+                    fallback={
+                      <Show
+                        when={selectedClaudeTeam()}
+                        fallback={<PreviewLogo />}
+                      >
+                        {(runtime: () => ClaudeTeamRuntime) => <TeamSummaryPreview runtime={runtime()} />}
+                      </Show>
+                    }
+                  >
+                    {(member: () => ClaudeMemberRuntime) => (
+                      <ClaudeMemberFallbackPreview runtime={selectedClaudeTeam()!} member={member()} />
+                    )}
+                  </Show>
+                }
               >
                 <box flexDirection="column" flexGrow={1}>
                   <PreviewHeader />

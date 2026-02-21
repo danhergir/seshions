@@ -87,6 +87,73 @@ export interface StatusUpdate {
   acknowledged: boolean
 }
 
+export type ClaudeTaskStatus =
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "unknown"
+
+export type ClaudeLinkConfidence = "exact_agent_id" | "name_match" | "unmatched"
+
+export interface ClaudeTeamMember {
+  id: string
+  name: string
+  role: string
+  agentType: string
+  metadata: Record<string, unknown>
+}
+
+export interface ClaudeTask {
+  id: string
+  title: string
+  status: ClaudeTaskStatus
+  assigneeId: string
+  assigneeName: string
+  createdAt: Date
+  updatedAt: Date
+  sourcePath: string
+}
+
+export interface ClaudeTeam {
+  name: string
+  path: string
+  leadId: string
+  members: ClaudeTeamMember[]
+  updatedAt: Date
+  metadata: Record<string, unknown>
+}
+
+export interface ClaudeMemberRuntime {
+  member: ClaudeTeamMember
+  sessionId: string
+  sessionTitle: string
+  tmuxSession: string
+  status: SessionStatus
+  linkConfidence: ClaudeLinkConfidence
+  linked: boolean
+  isLead: boolean
+  pendingCount: number
+  inProgressCount: number
+  completedCount: number
+  failedCount: number
+  lastTaskAt: Date | null
+  stale: boolean
+}
+
+export interface ClaudeTeamRuntime {
+  team: ClaudeTeam
+  tasks: ClaudeTask[]
+  members: ClaudeMemberRuntime[]
+  pendingCount: number
+  inProgressCount: number
+  completedCount: number
+  failedCount: number
+  activeCount: number
+  updatedAt: Date
+}
+
 export interface MCPServer {
   name: string
   command: string
