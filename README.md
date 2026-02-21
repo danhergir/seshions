@@ -24,8 +24,11 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 ## Updates
 
 - `seshions` checks npm once per day and shows an upgrade hint when a newer version is available.
+- When a newer version is detected at startup, it prompts: `Install now? (yes/no)`.
+- If you answer `yes`, it runs: `npm install -g seshions@latest` and exits so you can relaunch.
 - Upgrade command: `npm install -g seshions@latest`
 - Disable update checks with `SESHIONS_DISABLE_UPDATE_CHECK=1`
+- Enforce latest-only launch with `SESHIONS_REQUIRE_LATEST=1` (if outdated and you answer `no`, app won't start)
 
 ## Requirements
 

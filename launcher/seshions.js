@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 
-import { spawn } from "node:child_process"
+import { spawn, spawnSync } from "node:child_process"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { createInterface } from "node:readline/promises"
 import { ensureRuntime } from "../scripts/runtime/resolve-runtime.mjs"
 
 const APP = "seshions"
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 const UPDATE_TIMEOUT_MS = 1500
 const UPDATE_STATE_PATH = path.join(os.homedir(), ".seshions", "update-check.json")
+const UPDATE_CMD = "npm install -g seshions@latest"
 
 async function readPackageVersion() {
   const packagePath = new URL("../package.json", import.meta.url)
@@ -85,33 +87,88 @@ function printUpdateHint(currentVersion, latestVersion) {
   )
 }
 
-async function maybeNotifyUpdate(currentVersion) {
+async function resolveLatestVersion(currentVersion) {
   if (process.env.SESHIONS_DISABLE_UPDATE_CHECK === "1") {
-    return
+    return ""
   }
 
   const state = await readUpdateState()
   const now = Date.now()
   const shouldRefresh = now - state.lastCheckedAt >= UPDATE_CHECK_INTERVAL_MS
 
-  if (state.latestVersion && isNewerVersion(state.latestVersion, currentVersion)) {
-    printUpdateHint(currentVersion, state.latestVersion)
-  }
-
   if (!shouldRefresh) {
-    return
+    return state.latestVersion
   }
 
   try {
     const latestVersion = await fetchLatestNpmVersion()
     await writeUpdateState({ lastCheckedAt: now, latestVersion })
-
-    if (latestVersion && isNewerVersion(latestVersion, currentVersion) && latestVersion !== state.latestVersion) {
-      printUpdateHint(currentVersion, latestVersion)
-    }
+    return latestVersion
   } catch {
     await writeUpdateState({ lastCheckedAt: now, latestVersion: state.latestVersion })
+    return state.latestVersion
   }
+}
+
+function canPromptInTerminal() {
+  return process.stdin.isTTY && process.stdout.isTTY
+}
+
+async function askUpdateConfirmation(currentVersion, latestVersion) {
+  if (!canPromptInTerminal()) {
+    return false
+  }
+
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  })
+
+  try {
+    const answer = await rl.question(
+      `[seshions] Update available: v${currentVersion} -> v${latestVersion}\nInstall now? (yes/no): `
+    )
+    const normalized = String(answer || "").trim().toLowerCase()
+    return normalized === "yes" || normalized === "y"
+  } finally {
+    rl.close()
+  }
+}
+
+function installLatestNow() {
+  const result = spawnSync("npm", ["install", "-g", "seshions@latest"], {
+    stdio: "inherit",
+    env: process.env
+  })
+  return result.status === 0
+}
+
+async function maybeHandleUpdate(currentVersion) {
+  const latestVersion = await resolveLatestVersion(currentVersion)
+  if (!latestVersion || !isNewerVersion(latestVersion, currentVersion)) {
+    return { updated: false, blocked: false }
+  }
+
+  printUpdateHint(currentVersion, latestVersion)
+
+  const shouldInstall = await askUpdateConfirmation(currentVersion, latestVersion)
+  if (!shouldInstall) {
+    const strictLatest = process.env.SESHIONS_REQUIRE_LATEST === "1"
+    if (strictLatest) {
+      console.error("[seshions] Latest version is required. Update and run again.")
+      return { updated: false, blocked: true }
+    }
+    return { updated: false, blocked: false }
+  }
+
+  const installed = installLatestNow()
+  if (!installed) {
+    console.error("[seshions] Update failed. Continuing with current version.")
+    return { updated: false, blocked: false }
+  }
+
+  console.log("[seshions] Update installed. Please run seshions again.")
+  return { updated: true, blocked: true }
 }
 
 async function main() {
@@ -123,7 +180,10 @@ async function main() {
     return
   }
 
-  await maybeNotifyUpdate(installedVersion)
+  const updateResult = await maybeHandleUpdate(installedVersion)
+  if (updateResult.blocked || updateResult.updated) {
+    return
+  }
 
   const desiredVersion = process.env.SESHIONS_RUNTIME_VERSION || installedVersion
   const runtime = await ensureRuntime({
