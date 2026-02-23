@@ -1,6 +1,6 @@
 {
   "name": "seshions",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "description": "OpenTUI-based Agent Management",
   "type": "module",
   "main": "launcher/seshions.js",
