@@ -149,22 +149,21 @@ async function maybeHandleUpdate(currentVersion) {
     return { updated: false, blocked: false }
   }
 
+  console.log(`[seshions] Installed version: v${currentVersion}`)
+  console.log(`[seshions] Latest version:    v${latestVersion}`)
+  console.log("[seshions] You must update before continuing.")
   printUpdateHint(currentVersion, latestVersion)
 
   const shouldInstall = await askUpdateConfirmation(currentVersion, latestVersion)
   if (!shouldInstall) {
-    const strictLatest = process.env.SESHIONS_REQUIRE_LATEST === "1"
-    if (strictLatest) {
-      console.error("[seshions] Latest version is required. Update and run again.")
-      return { updated: false, blocked: true }
-    }
-    return { updated: false, blocked: false }
+    console.error("[seshions] Update required. Exiting.")
+    return { updated: false, blocked: true }
   }
 
   const installed = installLatestNow()
   if (!installed) {
-    console.error("[seshions] Update failed. Continuing with current version.")
-    return { updated: false, blocked: false }
+    console.error("[seshions] Update failed. Exiting.")
+    return { updated: false, blocked: true }
   }
 
   console.log("[seshions] Update installed. Please run seshions again.")

@@ -8,6 +8,7 @@ import { TextAttributes, ScrollBoxRenderable } from "@opentui/core"
 import { useTerminalDimensions, useKeyboard, useRenderer } from "@opentui/solid"
 import { useTheme } from "@tui/context/theme"
 import { useSync } from "@tui/context/sync"
+import { useKV } from "@tui/context/kv"
 import { useDialog } from "@tui/ui/dialog"
 import { useToast } from "@tui/ui/toast"
 import { DialogNew } from "@tui/component/dialog-new"
@@ -52,6 +53,7 @@ function stripAnsi(str: string): string {
 // Minimum width for dual-column layout
 const DUAL_COLUMN_MIN_WIDTH = 100
 const LEFT_PANEL_RATIO = 0.35
+const KV_SHOW_CLAUDE_METADATA = "home.show_claude_metadata"
 
 interface FooterHint {
   key: string
@@ -87,6 +89,7 @@ export function Home() {
   const dimensions = useTerminalDimensions()
   const { theme } = useTheme()
   const sync = useSync()
+  const kv = useKV()
   const dialog = useDialog()
   const toast = useToast()
   const renderer = useRenderer()
@@ -124,6 +127,7 @@ export function Home() {
   // Get all sessions
   const allSessions = createMemo(() => sync.session.list())
   const claudeTeamsRuntime = createMemo(() => sync.claudeTeams.listRuntime())
+  const showClaudeMetadata = createMemo(() => kv.get<boolean>(KV_SHOW_CLAUDE_METADATA, false))
 
   // Get grouped items (groups + sessions flattened)
   const groupedItems = createMemo(() => {
@@ -134,6 +138,22 @@ export function Home() {
   const rosterItems = createMemo<RosterItem[]>(() => {
     const items: RosterItem[] = [...groupedItems()]
     const runtimes = claudeTeamsRuntime()
+      .map((runtime) => {
+        if (showClaudeMetadata()) {
+          return runtime
+        }
+
+        const visibleMembers = runtime.members.filter((member) => member.linked)
+        if (visibleMembers.length === 0) {
+          return null
+        }
+
+        return {
+          ...runtime,
+          members: visibleMembers
+        } satisfies ClaudeTeamRuntime
+      })
+      .filter((runtime): runtime is ClaudeTeamRuntime => runtime !== null)
     if (runtimes.length === 0) {
       return items
     }
@@ -268,6 +288,16 @@ export function Home() {
     if (next < 0) next = len - 1
     if (next >= len) next = 0
     setSelectedIndex(next)
+  }
+
+  function toggleClaudeMetadataVisibility() {
+    const next = !showClaudeMetadata()
+    kv.set(KV_SHOW_CLAUDE_METADATA, next)
+    toast.show({
+      message: next ? "Showing Claude metadata rows" : "Hiding Claude metadata rows",
+      variant: "info",
+      duration: 2000
+    })
   }
 
   // Handle deleting a group
@@ -432,6 +462,11 @@ export function Home() {
     // p to manage workspace profiles
     if (evt.name === "p" && !evt.shift) {
       dialog.push(() => <DialogProfileManager />)
+    }
+
+    // v to toggle Claude metadata-only rows
+    if (evt.name === "v" && !evt.shift) {
+      toggleClaudeMetadataVisibility()
     }
 
   })
@@ -964,7 +999,8 @@ export function Home() {
       { key: "r", label: "rename" },
       { key: "q", label: "quit" },
       { key: "b", label: "blueprints" },
-      { key: "/", label: "palette" }
+      { key: "/", label: "palette" },
+      { key: "v", label: showClaudeMetadata() ? "hide-claude" : "show-claude" }
     ]
 
     const item = selectedItem()

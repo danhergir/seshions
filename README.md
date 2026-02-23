@@ -18,17 +18,19 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 - Footer is contextual: it always shows core keys (`Enter`, `r`, `q`, `/`) and adapts extra hints based on what is selected.
 - `/` opens the Action Hub (command palette) for advanced actions.
 - Action Hub includes orchestration commands: `Dispatch to role` and `Broadcast to group`.
+- Press `v` to hide/show Claude metadata-only rows (`no-pane`) in the roster.
 - Pressing `d` opens a confirmation dialog before deleting a session or group.
 - Press `b` to open Launch Blueprints.
 
 ## Updates
 
-- `seshions` checks npm once per day and shows an upgrade hint when a newer version is available.
-- When a newer version is detected at startup, it prompts: `Install now? (yes/no)`.
+- `seshions` checks npm once per day for a newer version.
+- If outdated, startup is blocked until updated (Codex-style behavior).
+- You get a startup prompt: `Install now? (yes/no)`.
 - If you answer `yes`, it runs: `npm install -g seshions@latest` and exits so you can relaunch.
+- If you answer `no` (or update fails), the app exits.
 - Upgrade command: `npm install -g seshions@latest`
-- Disable update checks with `SESHIONS_DISABLE_UPDATE_CHECK=1`
-- Enforce latest-only launch with `SESHIONS_REQUIRE_LATEST=1` (if outdated and you answer `no`, app won't start)
+- Disable update checks only if needed with `SESHIONS_DISABLE_UPDATE_CHECK=1`
 
 ## Requirements
 
@@ -84,6 +86,7 @@ When Claude team metadata exists, `seshions` adds a `Claude Teams` section in th
 - Reads task state from `~/.claude/tasks/<team-name>/`
 - Maps teammates to active Claude sessions when possible and shows link confidence (`linked`, `probable`, `no-pane`)
 - Shows per-team task counters (`P`, `IP`, `C`) and teammate runtime status in the roster
+- Use `v` or Action Hub command `Toggle Claude metadata rows` to hide/show metadata-only rows
 
 Optional override for testing/custom setups:
 

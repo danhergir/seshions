@@ -197,6 +197,7 @@ export async function tui(options: TuiOptions = {}) {
 
 function App(props: { onExit: () => Promise<void> }) {
   log("App component rendering")
+  const kv = useKV()
   const route = useRoute()
   const dimensions = useTerminalDimensions()
   const { theme } = useTheme()
@@ -206,6 +207,7 @@ function App(props: { onExit: () => Promise<void> }) {
   const toast = useToast()
   const keybind = useKeybind()
   const renderer = useRenderer()
+  const KV_SHOW_CLAUDE_METADATA = "home.show_claude_metadata"
 
   log("App initialized, route:", route.data.type, "dimensions:", dimensions().width, "x", dimensions().height)
 
@@ -278,6 +280,23 @@ function App(props: { onExit: () => Promise<void> }) {
         }
       },
       {
+        title: "Toggle Claude metadata rows",
+        value: "view.toggleClaudeMetadata",
+        category: "View",
+        keybind: "V",
+        contexts: ["home", "session"],
+        onSelect: () => {
+          const current = kv.get<boolean>(KV_SHOW_CLAUDE_METADATA, false)
+          const next = !current
+          kv.set(KV_SHOW_CLAUDE_METADATA, next)
+          toast.show({
+            message: next ? "Showing Claude metadata rows" : "Hiding Claude metadata rows",
+            variant: "info",
+            duration: 2000
+          })
+        }
+      },
+      {
         title: "Go home",
         value: "nav.home",
         category: "Navigation",
@@ -336,7 +355,7 @@ function App(props: { onExit: () => Promise<void> }) {
     if (evt.name === "?") {
       toast.show({
         title: "Help",
-        message: "/: Action Hub | N: New | B: Blueprints | P: Profiles | Q: Quit",
+        message: "/: Action Hub | V: Toggle Claude rows | N: New | B: Blueprints | P: Profiles | Q: Quit",
         variant: "info",
         duration: 5000
       })
