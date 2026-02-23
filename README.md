@@ -4,7 +4,7 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 
 ## Demo
 
-<video src="./assets/SeshionsDemo.mp4" controls muted playsinline></video>
+[![Seshions demo](./assets/demo.gif)](./assets/SeshionsDemo.mp4)
 
 ## What It Does
 
