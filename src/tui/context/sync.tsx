@@ -150,6 +150,10 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         async send(id: string, message: string): Promise<void> {
           await manager.sendMessage(id, message)
           refresh()
+        },
+        acknowledge(id: string): void {
+          manager.acknowledge(id)
+          refresh()
         }
       },
       group: {

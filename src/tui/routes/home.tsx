@@ -998,6 +998,7 @@ export function Home() {
       { key: "↑↓", label: "scan" },
       { key: "r", label: "rename" },
       { key: "q", label: "quit" },
+      { key: "i", label: "inbox" },
       { key: "b", label: "blueprints" },
       { key: "/", label: "palette" },
       { key: "v", label: showClaudeMetadata() ? "hide-claude" : "show-claude" }

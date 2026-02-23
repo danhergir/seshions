@@ -34,6 +34,7 @@ import { DialogNew } from "@tui/component/dialog-new"
 import { DialogProfileManager } from "@tui/component/dialog-profile"
 import { DialogBlueprintManager } from "@tui/component/dialog-blueprint"
 import { DialogBroadcastGroupSelect, DialogDispatchRoleSelect } from "@tui/component/dialog-orchestrate"
+import { DialogInbox } from "@tui/component/dialog-inbox"
 import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
 import { getStorage, setStorage, Storage } from "@/core/storage"
@@ -262,6 +263,16 @@ function App(props: { onExit: () => Promise<void> }) {
         }
       },
       {
+        title: "Global inbox",
+        value: "inbox.open",
+        category: "Orchestration",
+        keybind: "I",
+        contexts: ["home", "session"],
+        onSelect: () => {
+          dialog.replace(() => <DialogInbox />)
+        }
+      },
+      {
         title: "Dispatch to role",
         value: "orchestrate.dispatch",
         category: "Orchestration",
@@ -348,6 +359,10 @@ function App(props: { onExit: () => Promise<void> }) {
       dialog.replace(() => <DialogBlueprintManager />)
     }
 
+    if (evt.name === "i" && !evt.shift) {
+      dialog.replace(() => <DialogInbox />)
+    }
+
     if (evt.name === "q") {
       props.onExit()
     }
@@ -355,7 +370,7 @@ function App(props: { onExit: () => Promise<void> }) {
     if (evt.name === "?") {
       toast.show({
         title: "Help",
-        message: "/: Action Hub | V: Toggle Claude rows | N: New | B: Blueprints | P: Profiles | Q: Quit",
+        message: "/: Action Hub | I: Inbox | V: Toggle Claude rows | N: New | B: Blueprints | P: Profiles | Q: Quit",
         variant: "info",
         duration: 5000
       })
