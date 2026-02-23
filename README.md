@@ -6,8 +6,6 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 
 <video src="./assets/SeshionsDemo.mp4" controls muted playsinline></video>
 
-[Download demo video](./assets/SeshionsDemo.mp4)
-
 ## What It Does
 
 - Launch and track multiple AI coding sessions in one dashboard
