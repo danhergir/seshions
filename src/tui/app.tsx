@@ -22,8 +22,8 @@ import { Switch, Match, createEffect, ErrorBoundary, Show, onMount } from "solid
 import { RouteProvider, useRoute } from "@tui/context/route"
 import { SyncProvider, useSync } from "@tui/context/sync"
 import { ThemeProvider, useTheme } from "@tui/context/theme"
-import { KeybindProvider, useKeybind } from "@tui/context/keybind"
-import { KVProvider, useKV } from "@tui/context/kv"
+import { KeybindProvider } from "@tui/context/keybind"
+import { KVProvider } from "@tui/context/kv"
 import { ConfigProvider } from "@tui/context/config"
 import { loadConfig } from "@/core/config"
 import { DialogProvider, useDialog } from "@tui/ui/dialog"
@@ -34,7 +34,6 @@ import { DialogNew } from "@tui/component/dialog-new"
 import { DialogProfileManager } from "@tui/component/dialog-profile"
 import { DialogBlueprintManager } from "@tui/component/dialog-blueprint"
 import { DialogBroadcastGroupSelect, DialogDispatchRoleSelect } from "@tui/component/dialog-orchestrate"
-import { DialogInbox } from "@tui/component/dialog-inbox"
 import { Home } from "@tui/routes/home"
 import { Session } from "@tui/routes/session"
 import { getStorage, setStorage, Storage } from "@/core/storage"
@@ -198,7 +197,6 @@ export async function tui(options: TuiOptions = {}) {
 
 function App(props: { onExit: () => Promise<void> }) {
   log("App component rendering")
-  const kv = useKV()
   const route = useRoute()
   const dimensions = useTerminalDimensions()
   const { theme } = useTheme()
@@ -206,9 +204,7 @@ function App(props: { onExit: () => Promise<void> }) {
   const command = useCommandDialog()
   const sync = useSync()
   const toast = useToast()
-  const keybind = useKeybind()
   const renderer = useRenderer()
-  const KV_SHOW_CLAUDE_METADATA = "home.show_claude_metadata"
 
   log("App initialized, route:", route.data.type, "dimensions:", dimensions().width, "x", dimensions().height)
 
@@ -263,16 +259,6 @@ function App(props: { onExit: () => Promise<void> }) {
         }
       },
       {
-        title: "Global inbox",
-        value: "inbox.open",
-        category: "Orchestration",
-        keybind: "I",
-        contexts: ["home", "session"],
-        onSelect: () => {
-          dialog.replace(() => <DialogInbox />)
-        }
-      },
-      {
         title: "Dispatch to role",
         value: "orchestrate.dispatch",
         category: "Orchestration",
@@ -288,23 +274,6 @@ function App(props: { onExit: () => Promise<void> }) {
         contexts: ["home", "session"],
         onSelect: () => {
           dialog.replace(() => <DialogBroadcastGroupSelect />)
-        }
-      },
-      {
-        title: "Toggle Claude metadata rows",
-        value: "view.toggleClaudeMetadata",
-        category: "View",
-        keybind: "V",
-        contexts: ["home", "session"],
-        onSelect: () => {
-          const current = kv.get<boolean>(KV_SHOW_CLAUDE_METADATA, false)
-          const next = !current
-          kv.set(KV_SHOW_CLAUDE_METADATA, next)
-          toast.show({
-            message: next ? "Showing Claude metadata rows" : "Hiding Claude metadata rows",
-            variant: "info",
-            duration: 2000
-          })
         }
       },
       {
@@ -359,10 +328,6 @@ function App(props: { onExit: () => Promise<void> }) {
       dialog.replace(() => <DialogBlueprintManager />)
     }
 
-    if (evt.name === "i" && !evt.shift) {
-      dialog.replace(() => <DialogInbox />)
-    }
-
     if (evt.name === "q") {
       props.onExit()
     }
@@ -370,7 +335,7 @@ function App(props: { onExit: () => Promise<void> }) {
     if (evt.name === "?") {
       toast.show({
         title: "Help",
-        message: "/: Action Hub | I: Inbox | V: Toggle Claude rows | N: New | B: Blueprints | P: Profiles | Q: Quit",
+        message: "/: Action Hub | N: New | B: Blueprints | P: Profiles | Q: Quit",
         variant: "info",
         duration: 5000
       })

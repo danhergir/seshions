@@ -130,7 +130,9 @@ export interface ClaudeMemberRuntime {
   sessionId: string
   sessionTitle: string
   tmuxSession: string
+  paneId: string
   status: SessionStatus
+  activity: string
   linkConfidence: ClaudeLinkConfidence
   linked: boolean
   isLead: boolean

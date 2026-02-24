@@ -21,9 +21,7 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 
 - Footer is contextual: it always shows core keys (`Enter`, `r`, `q`, `/`) and adapts extra hints based on what is selected.
 - `/` opens the Action Hub (command palette) for advanced actions.
-- Action Hub includes orchestration commands: `Global inbox`, `Dispatch to role`, and `Broadcast to group`.
-- Press `i` to open Global Inbox (waiting approvals, errors, and active sessions in one place).
-- Press `v` to hide/show Claude metadata-only rows (`no-pane`) in the roster.
+- Action Hub includes orchestration commands: `Dispatch to role` and `Broadcast to group`.
 - Pressing `d` opens a confirmation dialog before deleting a session or group.
 - Press `b` to open Launch Blueprints.
 
@@ -78,12 +76,10 @@ Create and launch a reusable multi-session template:
 ## Orchestration (From One Controller Session)
 
 1. Open Action Hub with `/`
-2. Open `Global inbox` (or press `i`) to triage cross-session activity quickly
-3. Inbox shortcuts: `Enter` attach, `y` approve, `n` deny, `a` acknowledge, `v` view
-4. Choose `Dispatch to role` to send one prompt to a single target session
-5. Or choose `Broadcast to group` to send one prompt to every active session in that group
-6. Composer supports multi-line prompts (`Enter` adds newline, `Ctrl+Enter` sends)
-7. Broadcast requires an explicit second `Ctrl+Enter` confirmation before sending
+2. Choose `Dispatch to role` to send one prompt to a single target session
+3. Or choose `Broadcast to group` to send one prompt to every active session in that group
+4. Composer supports multi-line prompts (`Enter` adds newline, `Ctrl+Enter` sends)
+5. Broadcast requires an explicit second `Ctrl+Enter` confirmation before sending
 
 ## Claude Team Auto-Discovery
 
@@ -92,8 +88,9 @@ When Claude team metadata exists, `seshions` adds a `Claude Teams` section in th
 - Reads teams from `~/.claude/teams/*/config.json`
 - Reads task state from `~/.claude/tasks/<team-name>/`
 - Maps teammates to active Claude sessions when possible and shows link confidence (`linked`, `probable`, `no-pane`)
-- Shows per-team task counters (`P`, `IP`, `C`) and teammate runtime status in the roster
-- Use `v` or Action Hub command `Toggle Claude metadata rows` to hide/show metadata-only rows
+- Shows per-team task counters (`P`, `IP`, `C`), teammate runtime status, and current task activity in the roster
+- Waiting teammates/sessions get a pending indicator dot in the session list
+- Metadata-only teammates (`no-pane`) are hidden from the roster by default
 
 Optional override for testing/custom setups:
 

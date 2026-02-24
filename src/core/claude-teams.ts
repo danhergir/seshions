@@ -398,6 +398,72 @@ function deriveStatusFromTasks(memberTasks: ClaudeTask[]): SessionStatus {
   return "idle"
 }
 
+function normalizePaneId(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ""
+  if (/^%\d+$/.test(trimmed)) return trimmed
+  if (/^\d+$/.test(trimmed)) return `%${trimmed}`
+  return trimmed
+}
+
+function extractPaneId(member: ClaudeTeamMember): string {
+  return normalizePaneId(
+    pickString(member.metadata, [
+      "tmuxPaneId",
+      "tmux_pane_id",
+      "tmuxPane",
+      "tmux_pane",
+      "paneId",
+      "pane_id"
+    ])
+  )
+}
+
+function taskPriority(status: ClaudeTaskStatus): number {
+  switch (status) {
+    case "in_progress":
+      return 0
+    case "pending":
+      return 1
+    case "failed":
+      return 2
+    case "completed":
+      return 3
+    case "cancelled":
+      return 4
+    case "unknown":
+    default:
+      return 5
+  }
+}
+
+function summarizeActivity(tasks: ClaudeTask[]): string {
+  if (tasks.length === 0) {
+    return "No assigned task"
+  }
+
+  const focus = [...tasks].sort((a, b) => {
+    const pa = taskPriority(a.status)
+    const pb = taskPriority(b.status)
+    if (pa !== pb) return pa - pb
+    return b.updatedAt.getTime() - a.updatedAt.getTime()
+  })[0]!
+
+  if (focus.status === "in_progress") {
+    return `Working on ${focus.title}`
+  }
+  if (focus.status === "pending") {
+    return `Queued: ${focus.title}`
+  }
+  if (focus.status === "failed") {
+    return `Blocked: ${focus.title}`
+  }
+  if (focus.status === "completed") {
+    return `Done: ${focus.title}`
+  }
+  return focus.title
+}
+
 export function buildClaudeTeamRuntime(sessions: Session[]): ClaudeTeamRuntime[] {
   const teams = listClaudeTeams()
   const now = Date.now()
@@ -436,6 +502,8 @@ export function buildClaudeTeamRuntime(sessions: Session[]): ClaudeTeamRuntime[]
       const completedCount = assignedTasks.filter((task) => task.status === "completed").length
       const failedCount = assignedTasks.filter((task) => task.status === "failed").length
       const lastTaskAt = assignedTasks.length > 0 ? assignedTasks[0]!.updatedAt : null
+      const paneId = extractPaneId(member)
+      const hasDirectPaneLink = paneId.length > 0
       const stale = !bestSession && !!lastTaskAt && now - lastTaskAt.getTime() > STALE_THRESHOLD_MS
 
       return {
@@ -443,9 +511,11 @@ export function buildClaudeTeamRuntime(sessions: Session[]): ClaudeTeamRuntime[]
         sessionId: bestSession?.id || "",
         sessionTitle: bestSession?.title || "",
         tmuxSession: bestSession?.tmuxSession || "",
+        paneId,
         status: bestSession?.status || deriveStatusFromTasks(assignedTasks),
-        linkConfidence: bestSession ? bestConfidence : "unmatched",
-        linked: !!bestSession,
+        activity: summarizeActivity(assignedTasks),
+        linkConfidence: bestSession ? bestConfidence : hasDirectPaneLink ? "exact_agent_id" : "unmatched",
+        linked: !!bestSession || hasDirectPaneLink,
         isLead: compactNorm(member.id) === compactNorm(team.leadId) ||
           /(lead|coord|orchestr)/i.test(member.role),
         pendingCount,

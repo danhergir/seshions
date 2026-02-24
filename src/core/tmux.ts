@@ -439,14 +439,28 @@ export async function attachWithPty(sessionName: string): Promise<void> {
 }
 
 /**
- * Attach to a tmux session with Ctrl+C to detach
+ * Attach to a tmux target (session or pane) with Ctrl+C to detach
  * Configures tmux to use Ctrl+C as detach key, then uses spawnSync
  */
-export function attachSessionSync(sessionName: string): void {
+export function attachSessionSync(target: string): void {
   const { spawnSync } = require("child_process")
+  const resolvedSession = spawnSync(
+    "tmux",
+    ["display-message", "-p", "-t", target, "#{session_name}"],
+    { stdio: ["ignore", "pipe", "ignore"], encoding: "utf8" }
+  )
+  const sessionName = resolvedSession.status === 0 && typeof resolvedSession.stdout === "string"
+    ? resolvedSession.stdout.trim() || target
+    : target
 
-  // Bind Ctrl+C to detach in this session (C-c = ASCII 3)
+  // Bind detach/pane navigation shortcuts while attached.
   spawnSync("tmux", ["bind-key", "-n", "C-c", "detach-client"], { stdio: "ignore" })
+  // Keep pane navigation to a single key: Ctrl+G cycles to next pane.
+  spawnSync(
+    "tmux",
+    ["bind-key", "-n", "C-g", "select-pane", "-t", ":.+"],
+    { stdio: "ignore" }
+  )
 
   // Configure status bar with shortcuts
   spawnSync("tmux", ["set-option", "-t", sessionName, "status", "on"], { stdio: "ignore" })
@@ -454,7 +468,11 @@ export function attachSessionSync(sessionName: string): void {
   spawnSync("tmux", ["set-option", "-t", sessionName, "status-style", "bg=#1e1e2e,fg=#cdd6f4"], { stdio: "ignore" })
   spawnSync("tmux", ["set-option", "-t", sessionName, "status-left", ""], { stdio: "ignore" })
   spawnSync("tmux", ["set-option", "-t", sessionName, "status-right-length", "120"], { stdio: "ignore" })
-  spawnSync("tmux", ["set-option", "-t", sessionName, "status-right", "#[fg=#89b4fa]Ctrl+C#[fg=#6c7086] detach"], { stdio: "ignore" })
+  spawnSync(
+    "tmux",
+    ["set-option", "-t", sessionName, "status-right", "#[fg=#89b4fa]Ctrl+C#[fg=#6c7086] detach  #[fg=#89b4fa]Ctrl+G#[fg=#6c7086] next pane"],
+    { stdio: "ignore" }
+  )
 
   // Exit alternate screen buffer (TUI uses this)
   process.stdout.write("\x1b[?1049l")
@@ -464,13 +482,14 @@ export function attachSessionSync(sessionName: string): void {
   process.stdout.write("\x1b[?25h")
 
   // Attach to tmux - this blocks until user detaches (Ctrl+C or Ctrl+B d)
-  spawnSync("tmux", ["attach-session", "-t", sessionName], {
+  spawnSync("tmux", ["attach-session", "-t", target], {
     stdio: "inherit",
     env: process.env
   })
 
-  // Unbind session-specific keys (restore default behavior)
+  // Unbind temporary keys (restore default behavior).
   spawnSync("tmux", ["unbind-key", "-n", "C-c"], { stdio: "ignore" })
+  spawnSync("tmux", ["unbind-key", "-n", "C-g"], { stdio: "ignore" })
 
   // Clear screen and re-enter alternate buffer for TUI
   process.stdout.write("\x1b[2J\x1b[H")

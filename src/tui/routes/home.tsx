@@ -8,7 +8,6 @@ import { TextAttributes, ScrollBoxRenderable } from "@opentui/core"
 import { useTerminalDimensions, useKeyboard, useRenderer } from "@opentui/solid"
 import { useTheme } from "@tui/context/theme"
 import { useSync } from "@tui/context/sync"
-import { useKV } from "@tui/context/kv"
 import { useDialog } from "@tui/ui/dialog"
 import { useToast } from "@tui/ui/toast"
 import { DialogNew } from "@tui/component/dialog-new"
@@ -53,7 +52,6 @@ function stripAnsi(str: string): string {
 // Minimum width for dual-column layout
 const DUAL_COLUMN_MIN_WIDTH = 100
 const LEFT_PANEL_RATIO = 0.35
-const KV_SHOW_CLAUDE_METADATA = "home.show_claude_metadata"
 
 interface FooterHint {
   key: string
@@ -89,7 +87,6 @@ export function Home() {
   const dimensions = useTerminalDimensions()
   const { theme } = useTheme()
   const sync = useSync()
-  const kv = useKV()
   const dialog = useDialog()
   const toast = useToast()
   const renderer = useRenderer()
@@ -126,8 +123,6 @@ export function Home() {
 
   // Get all sessions
   const allSessions = createMemo(() => sync.session.list())
-  const claudeTeamsRuntime = createMemo(() => sync.claudeTeams.listRuntime())
-  const showClaudeMetadata = createMemo(() => kv.get<boolean>(KV_SHOW_CLAUDE_METADATA, false))
 
   // Get grouped items (groups + sessions flattened)
   const groupedItems = createMemo(() => {
@@ -136,48 +131,7 @@ export function Home() {
   })
 
   const rosterItems = createMemo<RosterItem[]>(() => {
-    const items: RosterItem[] = [...groupedItems()]
-    const runtimes = claudeTeamsRuntime()
-      .map((runtime) => {
-        if (showClaudeMetadata()) {
-          return runtime
-        }
-
-        const visibleMembers = runtime.members.filter((member) => member.linked)
-        if (visibleMembers.length === 0) {
-          return null
-        }
-
-        return {
-          ...runtime,
-          members: visibleMembers
-        } satisfies ClaudeTeamRuntime
-      })
-      .filter((runtime): runtime is ClaudeTeamRuntime => runtime !== null)
-    if (runtimes.length === 0) {
-      return items
-    }
-
-    items.push({
-      type: "claude-root",
-      teamCount: runtimes.length
-    })
-
-    for (const runtime of runtimes) {
-      items.push({
-        type: "claude-team",
-        runtime
-      })
-      for (const member of runtime.members) {
-        items.push({
-          type: "claude-member",
-          runtime,
-          member
-        })
-      }
-    }
-
-    return items
+    return [...groupedItems()]
   })
 
   // Keep selection in bounds
@@ -218,15 +172,36 @@ export function Home() {
     return undefined
   })
 
+  function resolveClaudeMemberTarget(member: ClaudeMemberRuntime): string {
+    if (member.paneId) return member.paneId
+    if (member.tmuxSession) return member.tmuxSession
+    if (member.sessionId) {
+      return sync.session.get(member.sessionId)?.tmuxSession || ""
+    }
+    return ""
+  }
+
+  const selectedTmuxTarget = createMemo(() => {
+    const item = selectedItem()
+    if (!item) return ""
+    if (item.type === "session") {
+      return item.session?.tmuxSession || ""
+    }
+    if (item.type === "claude-member") {
+      return resolveClaudeMemberTarget(item.member)
+    }
+    return ""
+  })
+
   // Fetch preview with debounce; keep showing previous content while loading
   createEffect(() => {
-    const session = selectedSession()
+    const target = selectedTmuxTarget()
 
     if (previewDebounceTimer) {
       clearTimeout(previewDebounceTimer)
     }
 
-    if (!session || !session.tmuxSession) {
+    if (!target) {
       setPreviewContent("")
       setPreviewLoading(false)
       return
@@ -243,7 +218,7 @@ export function Home() {
       if (previewFetchAbort) return
 
       try {
-        const content = await capturePane(session.tmuxSession, {
+        const content = await capturePane(target, {
           startLine: -200, // Last 200 lines
           join: true
         })
@@ -290,16 +265,6 @@ export function Home() {
     setSelectedIndex(next)
   }
 
-  function toggleClaudeMetadataVisibility() {
-    const next = !showClaudeMetadata()
-    kv.set(KV_SHOW_CLAUDE_METADATA, next)
-    toast.show({
-      message: next ? "Showing Claude metadata rows" : "Hiding Claude metadata rows",
-      variant: "info",
-      duration: 2000
-    })
-  }
-
   // Handle deleting a group
   async function executeDeleteGroup(group: Group) {
     const sessionCount = getGroupSessionCount(allSessions(), group.path)
@@ -323,16 +288,16 @@ export function Home() {
     sync.refresh()
   }
 
-  function handleAttach(session: Session) {
-    if (!session.tmuxSession) {
-      toast.show({ message: "Session has no tmux session", variant: "error", duration: 2000 })
+  function handleAttachTarget(target: string) {
+    if (!target) {
+      toast.show({ message: "No tmux target available", variant: "error", duration: 2000 })
       return
     }
 
     previewFetchAbort = true
     renderer.suspend()
     try {
-      attachSessionSync(session.tmuxSession)
+      attachSessionSync(target)
     } catch (err) {
       console.error("Attach error:", err)
     }
@@ -420,11 +385,25 @@ export function Home() {
       setSelectedIndex(Math.max(0, rosterItems().length - 1))
     }
 
-    // Enter: attach to session
+    // Enter: attach to session/agent pane
     if (evt.name === "return") {
-      const session = selectedSession()
-      if (session) {
-        handleAttach(session)
+      const item = selectedItem()
+      if (!item) {
+        return
+      }
+
+      if (item.type === "session" && item.session?.tmuxSession) {
+        handleAttachTarget(item.session.tmuxSession)
+        return
+      }
+
+      if (item.type === "claude-member") {
+        const target = resolveClaudeMemberTarget(item.member)
+        if (!target) {
+          toast.show({ message: "No linked tmux pane for this teammate", variant: "error", duration: 2000 })
+          return
+        }
+        handleAttachTarget(target)
       }
     }
 
@@ -462,11 +441,6 @@ export function Home() {
     // p to manage workspace profiles
     if (evt.name === "p" && !evt.shift) {
       dialog.push(() => <DialogProfileManager />)
-    }
-
-    // v to toggle Claude metadata-only rows
-    if (evt.name === "v" && !evt.shift) {
-      toggleClaudeMetadataVisibility()
     }
 
   })
@@ -512,6 +486,11 @@ export function Home() {
       default:
         return "IDLE"
     }
+  }
+
+  function truncateLabel(value: string, max = 28): string {
+    if (value.length <= max) return value
+    return value.slice(0, max - 2) + ".."
   }
 
   // Render group header
@@ -572,6 +551,7 @@ export function Home() {
     const isSelected = createMemo(() => props.index === selectedIndex())
     const color = createMemo(() => statusColor(props.session.status, isSelected()))
     const tag = createMemo(() => statusTag(props.session.status))
+    const hasPendingPrompt = createMemo(() => props.session.status === "waiting")
 
     const maxTitleLen = useDualColumn() ? 18 : 24
     const title = props.session.title.length > maxTitleLen
@@ -599,6 +579,10 @@ export function Home() {
         >
           {title}
         </text>
+        <Show when={hasPendingPrompt()}>
+          <text> </text>
+          <text fg={isSelected() ? theme.selectedListItemText : theme.warning}>●</text>
+        </Show>
 
         {/* Spacer */}
         <text flexGrow={1}> </text>
@@ -699,13 +683,16 @@ export function Home() {
   function ClaudeMemberItem(props: { runtime: ClaudeTeamRuntime; member: ClaudeMemberRuntime; index: number }) {
     const isSelected = createMemo(() => props.index === selectedIndex())
     const color = createMemo(() => statusColor(props.member.status, isSelected()))
+    const hasPendingPrompt = createMemo(() => props.member.status === "waiting")
     const linkTag = createMemo(() => {
+      if (props.member.paneId) return props.member.paneId
       if (!props.member.linked) return "no-pane"
       if (props.member.linkConfidence === "exact_agent_id") return "linked"
       if (props.member.linkConfidence === "name_match") return "probable"
       return "linked"
     })
     const linkColor = createMemo(() => {
+      if (props.member.paneId) return isSelected() ? theme.selectedListItemText : theme.info
       if (!props.member.linked) return theme.textMuted
       if (props.member.linkConfidence === "exact_agent_id") return theme.success
       if (props.member.linkConfidence === "name_match") return theme.warning
@@ -716,6 +703,7 @@ export function Home() {
       if (props.member.member.role) return props.member.member.role.slice(0, 6).toUpperCase()
       return "MATE"
     })
+    const activity = createMemo(() => truncateLabel(props.member.activity, useDualColumn() ? 34 : 22))
 
     return (
       <box
@@ -736,9 +724,17 @@ export function Home() {
         >
           {props.member.member.name}
         </text>
+        <Show when={hasPendingPrompt()}>
+          <text> </text>
+          <text fg={isSelected() ? theme.selectedListItemText : theme.warning}>●</text>
+        </Show>
 
         <text> </text>
         <text fg={isSelected() ? theme.selectedListItemText : theme.textMuted}>{badge()}</text>
+        <Show when={props.member.activity}>
+          <text> </text>
+          <text fg={isSelected() ? theme.selectedListItemText : theme.textMuted}>{activity()}</text>
+        </Show>
 
         <text flexGrow={1}> </text>
 
@@ -752,9 +748,58 @@ export function Home() {
   // Render preview pane header
   function PreviewHeader() {
     const session = selectedSession()
-    if (!session) return null
+    const member = selectedClaudeMember()
+    const team = selectedClaudeTeam()
+    const selectedTarget = selectedTmuxTarget()
 
-    const statusColor = createMemo(() => {
+    if (!session) {
+      if (!member || !selectedTarget) return null
+
+      return (
+        <box flexDirection="column" paddingLeft={1} paddingRight={1} gap={1}>
+          <box flexDirection="row" justifyContent="space-between" height={1}>
+            <text fg={theme.text} attributes={TextAttributes.BOLD}>
+              {member.member.name}
+            </text>
+            <box flexDirection="row" gap={1}>
+              <text fg={statusColor(member.status, false)}>{STATUS_ICONS[member.status]}</text>
+              <text fg={statusColor(member.status, false)}>{member.status}</text>
+            </box>
+          </box>
+          <box flexDirection="row" gap={1} height={1}>
+            <box
+              flexDirection="row"
+              backgroundColor={theme.backgroundElement}
+              paddingLeft={1}
+              paddingRight={1}
+              gap={1}
+            >
+              <text fg={theme.textMuted}>TEAM</text>
+              <text fg={theme.text} attributes={TextAttributes.BOLD}>
+                {team?.team.name || "Claude"}
+              </text>
+            </box>
+            <box
+              flexDirection="row"
+              backgroundColor={theme.backgroundElement}
+              paddingLeft={1}
+              paddingRight={1}
+              gap={1}
+            >
+              <text fg={theme.textMuted}>PANE</text>
+              <text fg={theme.info} attributes={TextAttributes.BOLD}>
+                {selectedTarget}
+              </text>
+            </box>
+          </box>
+          <box height={1}>
+            <text fg={theme.border}>{"─".repeat(rightWidth() - 2)}</text>
+          </box>
+        </box>
+      )
+    }
+
+    const sessionStatusColor = createMemo(() => {
       switch (session.status) {
         case "running": return theme.success
         case "waiting": return theme.warning
@@ -793,8 +838,8 @@ export function Home() {
             {session.title}
           </text>
           <box flexDirection="row" gap={1}>
-            <text fg={statusColor()}>{STATUS_ICONS[session.status]}</text>
-            <text fg={statusColor()}>{session.status}</text>
+            <text fg={sessionStatusColor()}>{STATUS_ICONS[session.status]}</text>
+            <text fg={sessionStatusColor()}>{session.status}</text>
           </box>
         </box>
 
@@ -998,10 +1043,8 @@ export function Home() {
       { key: "↑↓", label: "scan" },
       { key: "r", label: "rename" },
       { key: "q", label: "quit" },
-      { key: "i", label: "inbox" },
       { key: "b", label: "blueprints" },
-      { key: "/", label: "palette" },
-      { key: "v", label: showClaudeMetadata() ? "hide-claude" : "show-claude" }
+      { key: "/", label: "palette" }
     ]
 
     const item = selectedItem()
@@ -1012,7 +1055,7 @@ export function Home() {
       return [...base, { key: "d", label: "drop-group" }, { key: "g", label: "new-group" }]
     }
     if (item?.type === "claude-member") {
-      if (item.member.linked) {
+      if (resolveClaudeMemberTarget(item.member)) {
         return [{ key: "Enter", label: "attach" }, ...base]
       }
       return [...base]
@@ -1024,7 +1067,7 @@ export function Home() {
   })
 
   const rightPanelTitle = createMemo(() => {
-    if (selectedSession()) return "LIVE FEED"
+    if (selectedTmuxTarget()) return "LIVE FEED"
     if (selectedClaudeMember()) return "TEAMMATE"
     if (selectedClaudeTeam()) return "TEAM BOARD"
     return "LIVE FEED"
@@ -1072,7 +1115,7 @@ export function Home() {
 
       {/* Main content area */}
       <Show
-        when={allSessions().length > 0 || claudeTeamsRuntime().length > 0}
+        when={allSessions().length > 0}
         fallback={<EmptyState />}
       >
         <box flexDirection="row" flexGrow={1}>
@@ -1149,7 +1192,7 @@ export function Home() {
 
               {/* Preview content */}
               <Show
-                when={selectedSession()}
+                when={selectedTmuxTarget()}
                 fallback={
                   <Show
                     when={selectedClaudeMember()}
