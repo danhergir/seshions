@@ -1,6 +1,8 @@
 # Seshions
 
-Terminal session orchestrator for running multiple coding agents in parallel.
+Open-source multi-agent orchestration for terminal coding workflows.
+
+When you run multiple agents at once (Claude Code teams, Codex sessions, or mixed tools), tmux quickly becomes pane chaos. `seshions` gives you one control dashboard to launch, route, and supervise parallel agents without losing context.
 
 ## Demo
 
@@ -8,14 +10,20 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 
 ## What It Does
 
-- Launch and track multiple AI coding sessions in one dashboard
-- Launch blueprints to spin up multiple role-based sessions in one action
-- Dispatch prompts to a single role or broadcast to all sessions in a group
-- Attach/detach quickly with keyboard-first controls
-- Group sessions by workflow
-- Auto-discover Claude team members from local Claude metadata and surface them in the roster
+- Run multiple coding agents in parallel from one dashboard
+- Launch reusable blueprints to spin up role-based agent teams in one action
+- Dispatch prompts to a single role or broadcast to a full group
+- Track agent state (`running`, `waiting`, `idle`, `error`) at a glance
+- Move through active panes quickly while attached (`Ctrl+G` next pane, `Ctrl+C` detach)
+- Organize work by groups/workstreams
 - Optional git worktree isolation per session
-- Persist session state across restarts via tmux
+- Persist everything through tmux so sessions survive restarts
+
+## Why People Use It
+
+- You are coordinating 3+ agents and want one control loop instead of tab/pane hunting.
+- You want reproducible multi-agent setups (blueprints) instead of manually spawning sessions.
+- You need to route instructions by role/group fast while staying in terminal.
 
 ## Keyboard UX
 
@@ -24,6 +32,7 @@ Terminal session orchestrator for running multiple coding agents in parallel.
 - Action Hub includes orchestration commands: `Dispatch to role` and `Broadcast to group`.
 - Pressing `d` opens a confirmation dialog before deleting a session or group.
 - Press `b` to open Launch Blueprints.
+- Inside attached tmux sessions: `Ctrl+G` moves to next pane, `Ctrl+C` detaches back to `seshions`.
 
 ## Updates
 
@@ -81,22 +90,9 @@ Create and launch a reusable multi-session template:
 4. Composer supports multi-line prompts (`Enter` adds newline, `Ctrl+Enter` sends)
 5. Broadcast requires an explicit second `Ctrl+Enter` confirmation before sending
 
-## Claude Team Auto-Discovery
+## Claude Code + Codex Workflows
 
-When Claude team metadata exists, `seshions` adds a `Claude Teams` section in the roster and keeps it updated automatically.
-
-- Reads teams from `~/.claude/teams/*/config.json`
-- Reads task state from `~/.claude/tasks/<team-name>/`
-- Maps teammates to active Claude sessions when possible and shows link confidence (`linked`, `probable`, `no-pane`)
-- Shows per-team task counters (`P`, `IP`, `C`), teammate runtime status, and current task activity in the roster
-- Waiting teammates/sessions get a pending indicator dot in the session list
-- Metadata-only teammates (`no-pane`) are hidden from the roster by default
-
-Optional override for testing/custom setups:
-
-```bash
-export SESHIONS_CLAUDE_HOME=/path/to/claude-root
-```
+`seshions` is designed for mixed-agent workflows and works well when you run Claude Code and Codex side-by-side in tmux-managed sessions. You can launch teams from blueprints and orchestrate them from one dashboard instead of manually managing each pane/session.
 
 ## Local Development
 
