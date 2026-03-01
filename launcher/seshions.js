@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import { createInterface } from "node:readline/promises"
-import { ensureRuntime } from "../scripts/runtime/resolve-runtime.mjs"
+import { ensureRuntime, getRuntimeInfo } from "../scripts/runtime/resolve-runtime.mjs"
 
 const APP = "seshions"
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
@@ -143,6 +143,19 @@ function installLatestNow() {
   return result.status === 0
 }
 
+function isMissingRuntimeAsset(error) {
+  const statusCode = Number(error?.statusCode)
+  const text = String(error?.message || "")
+  return statusCode === 404 || statusCode === 403 || /Download failed \((404|403)\)/.test(text)
+}
+
+function printRuntimeAssetError(version) {
+  const { platform, repo } = getRuntimeInfo()
+  console.error(`[seshions] Runtime asset missing for v${version} (${platform}).`)
+  console.error(`[seshions] Expected release: https://github.com/${repo}/releases/tag/v${version}`)
+  console.error("[seshions] Please update once assets are published: npm install -g seshions@latest")
+}
+
 async function maybeHandleUpdate(currentVersion) {
   const latestVersion = await resolveLatestVersion(currentVersion)
   if (!latestVersion || !isNewerVersion(latestVersion, currentVersion)) {
@@ -185,10 +198,19 @@ async function main() {
   }
 
   const desiredVersion = process.env.SESHIONS_RUNTIME_VERSION || installedVersion
-  const runtime = await ensureRuntime({
-    version: desiredVersion,
-    allowLatestFallback: true
-  })
+  let runtime
+  try {
+    runtime = await ensureRuntime({
+      version: desiredVersion,
+      allowLatestFallback: false
+    })
+  } catch (error) {
+    if (isMissingRuntimeAsset(error)) {
+      printRuntimeAssetError(desiredVersion)
+      process.exit(1)
+    }
+    throw error
+  }
 
   const child = spawn(runtime.binaryPath, args, {
     stdio: "inherit",

@@ -23,7 +23,7 @@ async function main() {
 
   try {
     const version = await readPackageVersion()
-    const runtime = await ensureRuntime({ version, allowLatestFallback: true })
+    const runtime = await ensureRuntime({ version, allowLatestFallback: false })
     console.log(`[seshions] Runtime ready: v${runtime.version} (${runtime.platform})`)
   } catch (error) {
     const { platform, repo, runtimeRoot } = getRuntimeInfo()
